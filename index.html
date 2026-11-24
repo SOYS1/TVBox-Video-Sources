@@ -100,6 +100,25 @@
   .notice li+li{margin-top:2px}
   .notice li b{color:#e9e5da;font-weight:600}
 
+  /* ---------- 分区 ---------- */
+  .cats{display:flex;flex-direction:column;gap:22px}
+  .cat-head{display:flex;align-items:center;gap:9px;margin-bottom:10px;flex-wrap:wrap}
+  .cat-title{display:flex;align-items:center;gap:8px;font-size:15px;font-weight:600;letter-spacing:-.01em}
+  .cat-ico{font-size:15px;line-height:1;font-style:normal}
+  .cat-count{
+    font-family:var(--mono);font-size:10px;letter-spacing:.04em;color:#c3b7ff;
+    background:rgba(124,92,255,.16);border:1px solid rgba(124,92,255,.3);
+    border-radius:5px;padding:1px 6px;line-height:16px;
+  }
+  .cat-desc{flex:1;min-width:120px;font-size:11.5px;color:var(--mute)}
+  .cat-file{
+    font-family:var(--mono);font-size:10px;color:#8f7cff;
+    background:rgba(124,92,255,.14);border:1px solid rgba(124,92,255,.28);
+    padding:1px 6px;border-radius:4px;
+  }
+  .cat-body{display:flex;flex-direction:column;gap:10px}
+  .cat-note{margin:0;font-size:12px;color:var(--mute)}
+
   /* ---------- 源列表 ---------- */
   .list-head{
     margin-top:26px;display:flex;align-items:center;justify-content:space-between;
@@ -349,6 +368,8 @@
     body{padding:22px 14px 44px}
     .card{padding:24px 18px 22px;border-radius:20px}
     .list-head{margin-top:22px}
+    .cats{gap:18px}
+    .cat-desc{order:3;flex-basis:100%;min-width:0}
     .alts{grid-template-columns:1fr;gap:10px}
     .cover{height:96px}
     .src-title{font-size:14.5px}
@@ -369,9 +390,9 @@
   </div>
 
   <main class="card">
-    <h1><span>4K 影视源</span> · TVBox 配置</h1>
+    <h1><span>TVBox 配置</span> · 影视 / 直播源</h1>
     <p class="sub">
-      适用于 <b>TVBox</b> / <b>影视仓</b> / <b>OK影视</b> 等所有兼容壳子。下面每一条都是独立的 4K 源，
+      适用于 <b>TVBox</b> / <b>影视仓</b> / <b>OK影视</b> 等所有兼容壳子。下面是按分区整理的配置，
       <b>任选其一</b>复制到「配置地址」即可，没有主次之分。
     </p>
 
@@ -389,16 +410,13 @@
 
     <div class="list-head">
       <div class="field-label">
-        4K 源列表
+        源列表分区
         <span class="file-tag" id="srcTag">4K视频源.md</span>
       </div>
       <div class="list-note" id="listNote">加载中…</div>
     </div>
 
-    <div class="alts" id="alts">
-      <div class="skeleton"></div>
-      <div class="skeleton"></div>
-    </div>
+    <div class="cats" id="cats"></div>
 
     <p class="hint empty" id="hint" style="margin-top:12px;font-size:12.5px;color:var(--mute)">
       点地址可全选 · 「二维码」扫码导入 · 「查看包含的源」看这条配置里都收录了哪些站点
@@ -469,21 +487,45 @@
 
 <script>
 /* ======================= 配置 ======================= */
-// 源列表文件（与 index.html 同目录，改这个文件即可）
-const SOURCE_FILE = '4K视频源.md';
-
-// 读取失败时的兜底（file:// 直接打开会被浏览器拦截 fetch）
-const FALLBACK_URLS = [
-  'https://9280.kstore.vip/aiwex.json',
-  'https://700sjro44343.vicp.fun/240731/one/'
+/**
+ * 分区配置（与 index.html 同目录）。
+ * 想加分区，往这里加一条即可；每个分区一个独立的 md 文件。
+ * file 不存在的分区会自动跳过，不会报错。
+ */
+const CATEGORIES = [
+  {
+    id: 'movie',
+    title: '4K 影视源',
+    icon: '🎬',
+    desc: '点播用的配置，需登录网盘',
+    file: '4K视频源.md',
+    note: '适用于 TVBox / 影视仓 / OK影视，任选其一填到「配置地址」。'
+  },
+  {
+    id: 'live',
+    title: '直播源',
+    icon: '📺',
+    desc: '直播 / 电视直播列表，导入即用',
+    file: '直播源.md',
+    note: '多行文本形式的播放列表，TVBox 里「配置地址」或「直播源」处添加即可。'
+  }
 ];
+
+// 没有分区文件时的兜底（file:// 直接打开会被浏览器拦截 fetch）
+const FALLBACK = {
+  movie: [
+    'https://9280.kstore.vip/aiwex.json',
+    'https://700sjro44343.vicp.fun/240731/one/'
+  ]
+};
 
 /* ======================= 工具 ======================= */
 const $ = id => document.getElementById(id);
-const altsBox = $('alts');
+const catsBox = $('cats');
 const statusPill = $('statusPill');
 const toast = $('toast');
 let toastTimer;
+let cardSeq = 0;   // 全站卡片流水号（跨分区连续）
 
 function showToast(msg){
   toast.textContent = msg || '已复制';
@@ -577,30 +619,21 @@ function setStatus(text, type){
   statusPill.innerHTML = '<i></i>' + esc(text);
 }
 
-function render(list, fromFile){
-  if (!list.length){
-    altsBox.innerHTML = '';
-    $('listNote').textContent = '0 条';
-    $('hint').innerHTML = '没解析到有效地址，确认 <b>' + esc(SOURCE_FILE) + '</b> 里每行是 https:// 开头的链接。';
-    $('statLines').textContent = '0';
-    setStatus('源列表为空', 'warn');
-    return;
-  }
+// 单张卡片
+function cardHTML(item, n){
+  const host = hostOf(item.url);
+  const bare = host.replace(/^www\./, '');
+  const title = item.label || bare;
+  const extra = item.label
+    ? `<div class="chips"><span class="chip host">${esc(bare)}</span></div>`
+    : '';
+  const avatar = item.logo
+    ? `<span class="avatar has-logo"><img src="${esc(item.logo)}" alt="" loading="lazy" referrerpolicy="no-referrer" /></span>`
+    : `<span class="avatar">${TV_ICON}</span>`;
 
-  altsBox.innerHTML = list.map((item, i) => {
-    const host = hostOf(item.url);
-    const bare = host.replace(/^www\./, '');
-    const title = item.label || bare;
-    const chips = item.label
-      ? `<div class="chips"><span class="chip host">${esc(bare)}</span></div>`
-      : '';
-    const avatar = item.logo
-      ? `<span class="avatar has-logo"><img src="${esc(item.logo)}" alt="" loading="lazy" referrerpolicy="no-referrer" /></span>`
-      : `<span class="avatar">${TV_ICON}</span>`;
-
-    return `
+  return `
     <article class="src">
-      <div class="cover" data-idx="${String(i + 1).padStart(2, '0')}">
+      <div class="cover" data-idx="${String(n).padStart(2, '0')}">
         ${avatar}
         <span class="cover-meta">
           <span class="kind">${esc(kindOf(item.url))}</span>
@@ -609,7 +642,7 @@ function render(list, fromFile){
       </div>
       <div class="body">
         <h3 class="src-title" title="${esc(title)}">${esc(title)}</h3>
-        ${chips}
+        ${extra}
         <p class="src-url" title="${esc(item.url)}">${esc(item.url)}</p>
         <div class="src-actions">
           <button type="button" class="btn cp" data-copy="${esc(item.url)}">复制地址</button>
@@ -620,17 +653,73 @@ function render(list, fromFile){
         <span>查看包含的源</span>
         <span class="cnt" hidden></span>
         <span class="arw">›</span>
-      </button>    </article>`;
-  }).join('');
+      </button>
+    </article>`;
+}
 
-  $('listNote').textContent = list.length + ' 条 · 任选其一';
-  $('statLines').textContent = list.length;
-  setStatus(fromFile ? `已同步 · ${list.length} 条源` : `离线兜底 · ${list.length} 条源`, fromFile ? 'ok' : 'warn');
-  prefetchCounts();
+// 一个分区
+function catHTML(cat, list){
+  const cards = list.map(item => cardHTML(item, ++cardSeq)).join('');
+  return `
+    <section class="cat" data-cat="${esc(cat.id)}">
+      <div class="cat-head">
+        <div class="cat-title"><i class="cat-ico">${cat.icon || '📦'}</i>${esc(cat.title)}</div>
+        <span class="cat-count">${list.length} 条</span>
+        <span class="cat-desc">${esc(cat.desc || '')}</span>
+        <span class="cat-file">${esc(cat.file)}</span>
+      </div>
+      <div class="cat-body">
+        ${cat.note ? `<p class="cat-note">${esc(cat.note)}</p>` : ''}
+        <div class="alts">${cards}</div>
+      </div>
+    </section>`;
+}
+
+// 有源就渲染分区；没有就不渲染（空分区直接隐藏）
+function renderCategory(cat, list){
+  let sec = catsBox.querySelector(`.cat[data-cat="${cat.id}"]`);
+  if (!list.length){
+    if (sec) sec.remove();
+    return;
+  }
+  const html = catHTML(cat, list);
+  if (sec) sec.outerHTML = html;
+  else catsBox.insertAdjacentHTML('beforeend', html);
+}
+
+function renderTotals(){
+  syncCatCounts();
+  const total = catsBox.querySelectorAll('.src').length;
+  const cats = catsBox.querySelectorAll('.cat').length;
+  $('listNote').textContent = total ? `${cats} 个分区 · 共 ${total} 条` : '0 条';
+  const el = $('statLines');
+  if (el) el.textContent = total;
+  if (!total){
+    setStatus('源列表为空', 'warn');
+    return;
+  }
+  setStatus(`已同步 · ${total} 条源`, 'ok');
+}
+
+function clearSkeletons(){
+  catsBox.querySelectorAll('.skeleton').forEach(n => n.remove());
+}
+
+function renderSkeletons(n){
+  catsBox.innerHTML = Array.from({ length: Math.max(2, n) }, () => '<div class="skeleton"></div>').join('');
+}
+
+/* 分区标题里的条数在渲染后同步 */
+function syncCatCounts(){
+  catsBox.querySelectorAll('.cat').forEach(sec => {
+    const n = sec.querySelectorAll('.src').length;
+    const el = sec.querySelector('.cat-count');
+    if (el) el.textContent = `${n} 条`;
+  });
 }
 
 /* 列表交互（事件委托，只绑一次） */
-altsBox.addEventListener('click', e => {
+catsBox.addEventListener('click', e => {
   const copyBtn = e.target.closest('[data-copy]');
   if (copyBtn){
     copy(copyBtn.dataset.copy);
@@ -752,7 +841,7 @@ let sitesData = [];
 let sitesUrl = '';
 
 function setCardCount(url, n){
-  altsBox.querySelectorAll('.more').forEach(btn => {
+  catsBox.querySelectorAll('.more').forEach(btn => {
     if (btn.dataset.sites !== url) return;
     const cnt = btn.querySelector('.cnt');
     if (cnt){ cnt.textContent = n + ' 源'; cnt.hidden = false; }
@@ -761,7 +850,7 @@ function setCardCount(url, n){
 
 function cardOf(url){
   let hit = null;
-  altsBox.querySelectorAll('.src').forEach(card => {
+  catsBox.querySelectorAll('.src').forEach(card => {
     const more = card.querySelector('.more');
     if (!hit && more && more.dataset.sites === url) hit = card;
   });
@@ -779,7 +868,7 @@ function applyLogo(url, logo){
 }
 
 // logo 加载失败 → 退回占位图标
-altsBox.addEventListener('error', e => {
+catsBox.addEventListener('error', e => {
   const img = e.target;
   if (!img || img.tagName !== 'IMG' || !img.closest('.avatar')) return;
   const av = img.closest('.avatar');
@@ -885,7 +974,7 @@ $('sitesCopy').addEventListener('click', () => {
 
 /* 卡片上顺手预取站点数 / logo（只用直连，失败就算了） */
 function prefetchCounts(){
-  [...altsBox.querySelectorAll('.more')].forEach((btn, i) => {
+  [...catsBox.querySelectorAll('.more')].forEach((btn, i) => {
     setTimeout(async () => {
       const url = btn.dataset.sites;
       if (!url || btn.dataset.pf === '1') return;
@@ -915,59 +1004,75 @@ const fmtDate = v => {
   return `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
 
-// 在 github.io 上取该文件的最后一次 commit 时间；其它环境用响应头
-async function updateStamp(res){
-  const el = $('statUpdated');
-
-  // 1) 普通静态服务器：Last-Modified
+// 取源文件的最后更新时间：先看响应头，再查 GitHub 提交记录（取各分区里最新的那个）
+async function stampOf(cat, res){
   const lm = res && res.headers.get('last-modified');
-  if (lm){ const t = fmtDate(lm); if (t){ el.textContent = t; return; } }
+  if (lm){ const t = fmtDate(lm); if (t) return t; }
 
-  // 2) GitHub Pages：查提交记录（优先 Pages 注入的仓库信息）
   const owner = (window.__GH_OWNER__ || '').trim();
   const repo = (window.__GH_REPO__ || '').trim();
   const host = owner ? [location.hostname, owner] : location.hostname.match(/^([^.]+)\.github\.io$/i);
-  if (host){
-    const ownerName = host[1];
-    const seg = location.pathname.split('/').filter(Boolean)[0];
-    const repoName = repo || seg || (ownerName + '.github.io');
-    try{
-      const r = await fetch(
-        `https://api.github.com/repos/${ownerName}/${repoName}/commits?path=${encodeURIComponent(SOURCE_FILE)}&per_page=1`,
-        { headers: { 'Accept': 'application/vnd.github+json' } }
-      );
-      if (r.ok){
-        const arr = await r.json();
-        const t = arr[0] && fmtDate(arr[0].commit.committer.date);
-        if (t){ el.textContent = t; return; }
-      }
-    }catch(e){}
-  }
-  el.textContent = '—';
+  if (!host) return null;
+
+  const ownerName = host[1];
+  const seg = location.pathname.split('/').filter(Boolean)[0];
+  const repoName = repo || seg || (ownerName + '.github.io');
+  try {
+    const r = await fetch(
+      `https://api.github.com/repos/${ownerName}/${repoName}/commits?path=${encodeURIComponent(cat.file)}&per_page=1`,
+      { headers: { 'Accept': 'application/vnd.github+json' } }
+    );
+    if (!r.ok) return null;
+    const arr = await r.json();
+    return arr[0] ? fmtDate(arr[0].commit.committer.date) : null;
+  } catch (e) { return null; }
 }
 
-/* ======================= 启动：读取 md 并渲染 ======================= */
-(async function init(){
-  // 先把兜底数据显示出来，避免空白 / 首屏闪烁
-  render(parseSources(FALLBACK_URLS.join('\n')), false);
+async function updateStamp(stamps){
+  const el = $('statUpdated');
+  if (!el) return;
+  const valid = stamps.filter(Boolean).sort((a, b) => b.localeCompare(a));
+  el.textContent = valid[0] || '—';
+}
+
+/* ======================= 启动：读取各分区 md 并渲染 ======================= */
+async function loadCategory(cat){
+  // 兜底：先出数据，避免首屏空白
+  const fb = FALLBACK[cat.id];
+  if (fb && fb.length) renderCategory(cat, parseSources(fb.join('\n')));
 
   try {
-    const res = await fetch(encodeURI(SOURCE_FILE), { cache: 'no-store' });
+    const res = await fetch(encodeURI(cat.file), { cache: 'no-store' });
     if (!res.ok) throw new Error('HTTP ' + res.status);
-
-    const text = await res.text();
-    const list = parseSources(text);
-    if (!list.length) throw new Error('empty');
-
-    render(list, true);
-    await updateStamp(res);
+    const list = parseSources(await res.text());
+    renderCategory(cat, list);
+    return { cat, ok: list.length > 0, res };
   } catch (err) {
-    // file:// 打开、或文件缺失时走兜底
-    $('statUpdated').textContent = '—';
-    $('hint').innerHTML =
-      '读取 <b>' + esc(SOURCE_FILE) + '</b> 失败（本地双击打开时浏览器会拦截），当前显示内置兜底列表；' +
-      '部署到 GitHub Pages 后会自动同步。';
+    // 文件不存在 / 读不到 → 这个分区不显示，不影响其它分区
+    renderCategory(cat, []);
+    return { cat, ok: false, err };
   }
+}
+
+(async function init(){
+  renderSkeletons(CATEGORIES.length);
+
+  const results = await Promise.all(CATEGORIES.map(loadCategory));
+  clearSkeletons();
+  renderTotals();
+  prefetchCounts();
+
+  const okCount = results.filter(r => r.ok).length;
+  if (!okCount){
+    $('hint').innerHTML =
+      '没读到任何分区文件（本地双击打开时浏览器会拦截），当前显示内置兜底；' +
+      '部署到 GitHub Pages 后会自动同步。';
+    return;
+  }
+
+  // 取各文件最后更新时间，显示最新那个
+  const stamps = await Promise.all(results.filter(r => r.ok).map(r => stampOf(r.cat, r.res)));
+  await updateStamp(stamps);
 })();
 </script>
 </body>
