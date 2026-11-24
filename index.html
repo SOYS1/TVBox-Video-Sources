@@ -632,11 +632,12 @@ function cardHTML(item, n){
           <button type="button" class="btn qr" data-qr="${esc(item.url)}">二维码</button>
         </div>
       </div>
+      ${isPlaylist(item.url) ? '' : `
       <button type="button" class="more" data-sites="${esc(item.url)}" data-name="${esc(title)}">
         <span>查看包含的源</span>
         <span class="cnt" hidden></span>
         <span class="arw">›</span>
-      </button>
+      </button>`}
     </article>`;
 }
 
@@ -801,6 +802,24 @@ const typeTag = t => {
 };
 const sitesOf = cfg => (cfg && Array.isArray(cfg.sites) ? cfg.sites : []);
 
+// 直播源那种播放列表（m3u / txt）没有站点清单，卡片上不显示这个按钮
+const isPlaylist = u => /^(M3U8?|TXT|TS|TXT)$/i.test(kindOf(u));
+
+// 带超时的 fetch，避免代理挂住导致弹层一直转圈
+async function fetchTxt(target, ms){
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), ms || 12000);
+  try {
+    const res = await fetch(target, { cache: 'no-store', signal: ctrl.signal });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    return await res.text();
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+const NOT_JSON = 'NOT_JSON';
+
 // 取配置 JSON：先直连（支持 CORS 的源），失败再走公共代理
 function loadConfig(url){
   if (cfgCache.has(url)) return cfgCache.get(url);
@@ -809,18 +828,31 @@ function loadConfig(url){
     const tries = [url, ...CORS_PROXIES.map(fn => fn(url))];
     let lastErr;
     for (const target of tries){
+      let text;
       try {
-        const res = await fetch(target, { cache: 'no-store' });
-        if (!res.ok) throw new Error('HTTP ' + res.status);
-        const text = await res.text();
+        text = await fetchTxt(target, 12000);
+      } catch (err) { lastErr = err; continue; }
+
+      // 不是 JSON（比如 m3u 播放列表）就没必要再试代理了
+      if (!/^\s*[{[]/.test(text.replace(/^\uFEFF/, ''))){
+        const e = new Error('不是 JSON');
+        e.code = NOT_JSON;
+        throw e;
+      }
+      try {
         return JSON.parse(text.replace(/^\uFEFF/, ''));
-      } catch (err) { lastErr = err; }
+      } catch (err) {
+        lastErr = err;
+        const e = new Error('不是 JSON');
+        e.code = NOT_JSON;
+        throw e;
+      }
     }
     throw lastErr || new Error('读取失败');
   })();
 
   cfgCache.set(url, job);
-  job.catch(() => cfgCache.delete(url));   // 失败不缓存，方便重试
+  job.catch(err => { if (err && err.code !== NOT_JSON) cfgCache.delete(url); });  // 网络失败不缓存，方便重试
   return job;
 }
 
@@ -934,6 +966,16 @@ async function openSites(url, name){
       renderSites('');
     }
   } catch (err) {
+    // 播放列表（m3u）本来就没有站点清单
+    if (err && err.code === NOT_JSON){
+      $('sitesSub').textContent = '这是播放列表，没有站点清单';
+      $('sitesList').innerHTML =
+        `<div class="panel-state">
+           这条地址是 <b>播放列表</b>（m3u 等），不是 TVBox 配置，所以没有站点清单。<br/>
+           直接复制地址用就行，不影响观看。
+         </div>`;
+      return;
+    }
     // 跨域读不到属于正常情况：配置照样能直接用，这里只是看不了清单
     $('sitesSub').textContent = '清单不可用 · 不影响使用';
     $('sitesList').innerHTML =
@@ -964,16 +1006,16 @@ function prefetchCounts(){
   [...catsBox.querySelectorAll('.more')].forEach((btn, i) => {
     setTimeout(async () => {
       const url = btn.dataset.sites;
-      if (!url || btn.dataset.pf === '1') return;
+      if (!url || btn.dataset.pf === '1' || isPlaylist(url)) return;
       btn.dataset.pf = '1';
       try {
         let cfg;
         if (cfgCache.has(url)){
           cfg = await cfgCache.get(url);
         } else {
-          const res = await fetch(url, { cache: 'no-store' });
-          if (!res.ok) return;
-          cfg = JSON.parse((await res.text()).replace(/^\uFEFF/, ''));
+          const text = await fetchTxt(url, 12000);
+          if (!/^\s*[{[]/.test(text.replace(/^\uFEFF/, ''))) return;   // 播放列表跳过
+          cfg = JSON.parse(text.replace(/^\uFEFF/, ''));
           cfgCache.set(url, Promise.resolve(cfg));   // 顺手缓存，点开即显示
         }
         if (cfg && cfg.logo) applyLogo(url, String(cfg.logo));
