@@ -79,6 +79,23 @@
   .sub{margin:12px 0 0;color:var(--dim);font-size:14.5px}
   .sub b{color:var(--text);font-weight:600}
 
+  /* ---------- 使用须知 ---------- */
+  .notice{
+    margin-top:20px;padding:13px 15px 12px;border-radius:14px;
+    border:1px solid rgba(251,191,36,.28);
+    background:linear-gradient(180deg,rgba(251,191,36,.09),rgba(251,191,36,.035));
+  }
+  .notice-hd{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:#ffd479}
+  .notice-hd b{color:#ffe3a3}
+  .notice-ico{
+    flex:none;width:18px;height:18px;border-radius:50%;display:grid;place-items:center;
+    font-size:12px;font-weight:800;font-style:normal;color:#1a1200;
+    background:linear-gradient(135deg,#ffe08a,var(--warn));
+  }
+  .notice ul{margin:8px 0 0;padding-left:17px;font-size:12.5px;color:#b7b3a4;line-height:1.75}
+  .notice li+li{margin-top:2px}
+  .notice li b{color:#e9e5da;font-weight:600}
+
   /* ---------- 源列表 ---------- */
   .list-head{
     margin-top:26px;display:flex;align-items:center;justify-content:space-between;
@@ -280,6 +297,7 @@
   }
   .step h4{margin:0 0 4px;font-size:13.5px;font-weight:600}
   .step p{margin:0;font-size:12.5px;color:var(--mute);line-height:1.6}
+  .step p b{color:var(--dim);font-weight:600}
 
   /* ---------- 统计 ---------- */
   .stats{
@@ -343,6 +361,18 @@
       <b>任选其一</b>复制到「配置地址」即可，没有主次之分。
     </p>
 
+    <div class="notice">
+      <div class="notice-hd">
+        <span class="notice-ico">!</span>
+        <span><b>需要登录网盘</b> · 不需要网盘会员</span>
+      </div>
+      <ul>
+        <li>播放用的网盘资源，需要先在配置里<b>登录自己的网盘账号</b>才能播放。</li>
+        <li>视频报错时，<b>看报错内容</b> —— 多数是<b>没登录 / 登录失效 / 资源失效</b>，按提示处理即可。</li>
+        <li>源与源之间的登录方式<b>不完全相同</b>，以你所用源里的「配置中心」提示为准。</li>
+      </ul>
+    </div>
+
     <div class="list-head">
       <div class="field-label">
         4K 源列表
@@ -363,18 +393,18 @@
     <div class="steps">
       <div class="step">
         <div class="n">1</div>
-        <h4>挑一条源</h4>
-        <p>列表中任选一条，点「复制地址」拿到 JSON 配置。</p>
+        <h4>复制地址</h4>
+        <p>点任一张卡片上的「复制地址」，拿到这条源的配置链接。</p>
       </div>
       <div class="step">
         <div class="n">2</div>
-        <h4>填入配置</h4>
-        <p>打开 TVBox → 设置 → 配置地址 → 粘贴 → 确定。</p>
+        <h4>添加链接</h4>
+        <p>打开支持 TVBox 影视源的软件（TVBox / 影视仓 / OK影视），添加地址链接。</p>
       </div>
       <div class="step">
         <div class="n">3</div>
-        <h4>重启生效</h4>
-        <p>返回首页等待加载完成，即可在「点播」里浏览。</p>
+        <h4>登录网盘</h4>
+        <p>保存后进入「<b>配置中心</b>」这类分区，登录网盘即可。各源登录方式不完全相同，按提示操作。</p>
       </div>
     </div>
 
