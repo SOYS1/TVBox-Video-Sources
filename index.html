@@ -555,8 +555,7 @@ function render(list, fromFile){
         <span>查看包含的源</span>
         <span class="cnt" hidden></span>
         <span class="arw">›</span>
-      </button>
-    </article>`;
+      </button>    </article>`;
   }).join('');
 
   $('listNote').textContent = list.length + ' 条 · 任选其一';
@@ -766,12 +765,13 @@ async function openSites(url, name){
       renderSites('');
     }
   } catch (err) {
-    $('sitesSub').textContent = '读取失败';
+    // 跨域读不到属于正常情况：配置照样能直接用，这里只是看不了清单
+    $('sitesSub').textContent = '清单不可用 · 不影响使用';
     $('sitesList').innerHTML =
       `<div class="panel-state">
-         该源禁止浏览器跨域读取，页面拿不到它的配置内容。<br/>
-         在 <b>TVBox</b> 里这条源可以正常使用，也可以
-         <a href="${esc(url)}" target="_blank" rel="noreferrer noopener">直接打开配置</a> 自己看。<br/>
+         这条源的服务器不允许浏览器直接读取配置，所以清单看不了。<br/>
+         <b>不影响使用</b>：复制地址填到 TVBox 里效果完全一样。<br/>
+         <a href="${esc(url)}" target="_blank" rel="noreferrer noopener">直接打开配置</a>
          <button type="button" class="retry" id="sitesRetry">重试</button>
        </div>`;
     const retry = $('sitesRetry');
