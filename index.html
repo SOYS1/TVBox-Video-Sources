@@ -202,13 +202,6 @@
     margin:0;font-size:15px;font-weight:600;letter-spacing:-.01em;line-height:1.35;
     overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
   }
-  .chips{display:flex;flex-wrap:wrap;gap:6px}
-  .chip{
-    font-size:10.5px;color:var(--dim);background:rgba(255,255,255,.05);
-    border:1px solid var(--line);border-radius:6px;padding:2px 7px;
-    display:inline-flex;align-items:center;gap:5px;white-space:nowrap;
-  }
-  .chip.host{font-family:var(--mono);color:#a7a7ba;max-width:100%;overflow:hidden;text-overflow:ellipsis}
   .src-url{
     margin:0;font-family:var(--mono);font-size:10.5px;line-height:1.55;color:var(--mute);
     background:#08080e;border:1px solid var(--line);border-radius:10px;
@@ -538,10 +531,6 @@ function esc(s){
   return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 
-function hostOf(u){
-  try { return new URL(u).hostname.replace(/^www\./, ''); } catch(e){ return u; }
-}
-
 function kindOf(u){
   try {
     const m = new URL(u).pathname.match(/\.([a-z0-9]{2,6})$/i);
@@ -619,14 +608,9 @@ function setStatus(text, type){
   statusPill.innerHTML = '<i></i>' + esc(text);
 }
 
-// 单张卡片
+// 单张卡片（不显示域名，只显示手动写的名称 + 链接）
 function cardHTML(item, n){
-  const host = hostOf(item.url);
-  const bare = host.replace(/^www\./, '');
-  const title = item.label || bare;
-  const extra = item.label
-    ? `<div class="chips"><span class="chip host">${esc(bare)}</span></div>`
-    : '';
+  const title = (item.label || '').trim();
   const avatar = item.logo
     ? `<span class="avatar has-logo"><img src="${esc(item.logo)}" alt="" loading="lazy" referrerpolicy="no-referrer" /></span>`
     : `<span class="avatar">${TV_ICON}</span>`;
@@ -641,8 +625,7 @@ function cardHTML(item, n){
         </span>
       </div>
       <div class="body">
-        <h3 class="src-title" title="${esc(title)}">${esc(title)}</h3>
-        ${extra}
+        ${title ? `<h3 class="src-title" title="${esc(title)}">${esc(title)}</h3>` : ''}
         <p class="src-url" title="${esc(item.url)}">${esc(item.url)}</p>
         <div class="src-actions">
           <button type="button" class="btn cp" data-copy="${esc(item.url)}">复制地址</button>
@@ -731,7 +714,8 @@ catsBox.addEventListener('click', e => {
 
   const qrBtn = e.target.closest('[data-qr]');
   if (qrBtn){
-    openQr(qrBtn.dataset.qr, qrBtn.closest('.src').querySelector('.src-title').textContent);
+    const t = qrBtn.closest('.src').querySelector('.src-title');
+    openQr(qrBtn.dataset.qr, t ? t.textContent : '');
     return;
   }
 
@@ -780,7 +764,10 @@ let qrCurrent = '';
 function openQr(url, name){
   qrCurrent = url;
   qrUrl.textContent = url;
-  $('qrName').textContent = name || hostOf(url);
+  // 没写名称就不显示标题（用户不要域名）
+  const n = (name || '').trim();
+  $('qrName').textContent = n;
+  $('qrName').hidden = !n;
   qrCopy.textContent = '复制地址';
   qrCopy.classList.remove('done');
   qrImg.innerHTML =
@@ -902,7 +889,7 @@ function renderSites(filter){
 async function openSites(url, name){
   sitesUrl = url;
   sitesData = [];
-  $('sitesTitle').textContent = name || hostOf(url);
+  $('sitesTitle').textContent = (name || '').trim() || '包含的源';
   $('sitesSub').textContent = '正在读取配置…';
   $('sitesSearchWrap').hidden = true;
   $('sitesSearch').value = '';
