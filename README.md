@@ -15,8 +15,9 @@
 
 ```
 .
-├── index.html      # 页面本体，一般不用动
-├── 4K视频源.md      # ← 你只需要改这个
+├── index.html                     # 页面本体，一般不用动
+├── 4K视频源.md                     # ← 你只需要改这个
+├── .github/workflows/pages.yml    # 推 main 自动部署 Pages
 └── README.md
 ```
 
@@ -67,14 +68,18 @@ https://9280.kstore.vip/aiwex.json
 
 ## 部署（GitHub Pages）
 
-1. 把 `index.html`、`4K视频源.md` 放进仓库**根目录**，推到 `main` 分支。
-2. 仓库 → **Settings → Pages** → Source 选 **Deploy from a branch** → Branch `main` / `/ (root)` → Save。
-3. 等 1～2 分钟，访问 <https://soys1.github.io/TVBox-Video-Sources/>。
+仓库已带好自动部署工作流 [`.github/workflows/pages.yml`](./.github/workflows/pages.yml)，推送到 `main` 就自动发布。
+
+1. 仓库 → **Settings → Pages** → **Source 选 `GitHub Actions`**（只需设置一次）。
+2. 之后每次 `git push` 到 `main`，工作流会自动部署，1～2 分钟后可访问
+   <https://soys1.github.io/TVBox-Video-Sources/>。
+3. 也可以在 **Actions → Deploy to GitHub Pages → Run workflow** 手动触发。
 
 **注意：**
 - 仓库必须是 **Public**（私有仓库的 Pages 需要 GitHub Pro 且默认不公开，TVBox 也拿不到）。
 - Pages 有 CDN 缓存，改完 md 后最长约 10 分钟生效；急的话用无痕窗口或加 `?v=2` 访问。
-- 「源文件更新」日期：在 `github.io` 上会调用 GitHub API 读取该文件的最后一次提交时间，取不到时显示 `—`。
+- 「源文件更新」日期：在 `github.io` 上会调用 GitHub API 读取该文件的最后一次提交时间
+  （工作流会注入 `__GH_OWNER__` / `__GH_REPO__`，自定义域名也能用），取不到时显示 `—`。
 
 ## 本地预览
 

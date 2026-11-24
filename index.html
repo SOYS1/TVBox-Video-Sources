@@ -831,15 +831,17 @@ async function updateStamp(res){
   const lm = res && res.headers.get('last-modified');
   if (lm){ const t = fmtDate(lm); if (t){ el.textContent = t; return; } }
 
-  // 2) GitHub Pages：查提交记录
-  const host = location.hostname.match(/^([^.]+)\.github\.io$/i);
+  // 2) GitHub Pages：查提交记录（优先 Pages 注入的仓库信息）
+  const owner = (window.__GH_OWNER__ || '').trim();
+  const repo = (window.__GH_REPO__ || '').trim();
+  const host = owner ? [location.hostname, owner] : location.hostname.match(/^([^.]+)\.github\.io$/i);
   if (host){
-    const owner = host[1];
+    const ownerName = host[1];
     const seg = location.pathname.split('/').filter(Boolean)[0];
-    const repo = seg || (owner + '.github.io');
+    const repoName = repo || seg || (ownerName + '.github.io');
     try{
       const r = await fetch(
-        `https://api.github.com/repos/${owner}/${repo}/commits?path=${encodeURIComponent(SOURCE_FILE)}&per_page=1`,
+        `https://api.github.com/repos/${ownerName}/${repoName}/commits?path=${encodeURIComponent(SOURCE_FILE)}&per_page=1`,
         { headers: { 'Accept': 'application/vnd.github+json' } }
       );
       if (r.ok){
