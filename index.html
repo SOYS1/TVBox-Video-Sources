@@ -17,6 +17,10 @@
   md 文件写法（每行一条，空行和 # 开头的行会被忽略）：
       https://example.com/tvbox/4k.json
       桌面线路 | https://example.com/tvbox/other.json
+      桌面线路 | https://example.com/tvbox/other.json | https://example.com/logo.png
+
+  · 第三个字段（可选）是卡片上的 logo 图片地址，不写就自动读配置里的 "logo"，
+    都读不到就用占位图标。改 md 文件即可换 logo，不用动本页面。
   ============================================================
 -->
 <style>
@@ -154,6 +158,16 @@
     display:grid;place-items:center;font-size:17px;font-weight:800;color:#0a0a12;
     background:linear-gradient(135deg,#c6b9ff,#5ce0f2);
     box-shadow:0 12px 26px -12px rgba(124,92,255,.95),inset 0 1px 0 rgba(255,255,255,.55);
+    overflow:hidden;
+  }
+  .avatar svg{display:block;opacity:.8}
+  .avatar.has-logo{
+    background:rgba(255,255,255,.07);
+    border:1px solid rgba(255,255,255,.14);
+    box-shadow:0 14px 26px -16px rgba(0,0,0,.9);
+  }
+  .avatar.has-logo img{
+    width:100%;height:100%;display:block;object-fit:contain;padding:4px;
   }
   .cover-meta{position:relative;z-index:1;display:flex;flex-direction:column;align-items:flex-end;gap:6px}
   .kind{
@@ -516,28 +530,48 @@ function copy(text){
  * 每行一条，全部平等：
  *   https://xxx/a.json
  *   显示名 | https://xxx/b.json
+ *   显示名 | https://xxx/c.json | https://xxx/logo.png
+ *   https://xxx/d.json | https://xxx/logo.gif        ← 不写名称，只加 logo
  * 忽略空行、# 或 // 开头的注释行、``` 代码围栏
  */
 function parseSources(text){
+  const clean = s => String(s || '').replace(/^[-*]\s*/, '').trim();
+  const isUrl = s => /^https?:\/\//i.test(String(s || '').trim());
+
   return String(text || '')
     .split(/\r?\n/)
     .map(line => line.trim())
     .filter(line => line && !line.startsWith('#') && !line.startsWith('//') && !line.startsWith('```'))
     .map(line => {
-      const m = line.split('|');
-      if (m.length >= 2){
-        const label = m[0].trim().replace(/^[-*]\s*/, '');
-        const url = m.slice(1).join('|').trim();
-        return { label, url };
+      const parts = line.split('|').map(s => s.trim());
+      let label = '', url = '', logo = '';
+
+      if (parts.length >= 3){
+        label = clean(parts[0]);
+        url = parts[1];
+        logo = parts.slice(2).join('|');
+      } else if (parts.length === 2){
+        if (isUrl(parts[0]) && isUrl(parts[1])){
+          // 地址 | logo
+          url = parts[0];
+          logo = parts[1];
+        } else {
+          label = clean(parts[0]);
+          url = parts[1];
+        }
+      } else {
+        url = clean(parts[0]);
       }
-      // 兼容 markdown 列表 "- https://..."
-      const url = line.replace(/^[-*]\s*/, '').trim();
-      return { label: '', url };
+
+      return { label, url: clean(url), logo: isUrl(logo) ? logo.trim() : '' };
     })
     .filter(item => /^https?:\/\//i.test(item.url));
 }
 
 /* ======================= 渲染 ======================= */
+// 没有 logo 时的占位图标（不用首字母）
+const TV_ICON = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.6" y="6.2" width="18.8" height="12.2" rx="2.6"/><path d="M8.2 21h7.6"/><path d="M12 18.4V21"/><path d="M7.4 10.6h4.2"/></svg>';
+
 function setStatus(text, type){
   statusPill.className = 'pill' + (type === 'warn' ? ' warn' : '');
   statusPill.innerHTML = '<i></i>' + esc(text);
@@ -557,16 +591,17 @@ function render(list, fromFile){
     const host = hostOf(item.url);
     const bare = host.replace(/^www\./, '');
     const title = item.label || bare;
-    const initial = bare.match(/[a-z]/i);
-    const monogram = (initial ? initial[0] : bare[0] || 'S').toUpperCase();
     const chips = item.label
       ? `<div class="chips"><span class="chip host">${esc(bare)}</span></div>`
       : '';
+    const avatar = item.logo
+      ? `<span class="avatar has-logo"><img src="${esc(item.logo)}" alt="" loading="lazy" referrerpolicy="no-referrer" /></span>`
+      : `<span class="avatar">${TV_ICON}</span>`;
 
     return `
     <article class="src">
       <div class="cover" data-idx="${String(i + 1).padStart(2, '0')}">
-        <span class="avatar">${esc(monogram)}</span>
+        ${avatar}
         <span class="cover-meta">
           <span class="kind">${esc(kindOf(item.url))}</span>
           <span class="uhd">2160P</span>
@@ -724,6 +759,34 @@ function setCardCount(url, n){
   });
 }
 
+function cardOf(url){
+  let hit = null;
+  altsBox.querySelectorAll('.src').forEach(card => {
+    const more = card.querySelector('.more');
+    if (!hit && more && more.dataset.sites === url) hit = card;
+  });
+  return hit;
+}
+
+// 把配置里读到的 logo 贴到卡片上（md 里手写过的优先，不覆盖）
+function applyLogo(url, logo){
+  if (!/^https?:\/\//i.test(String(logo || ''))) return;
+  const card = cardOf(url);
+  const av = card && card.querySelector('.avatar');
+  if (!av || av.classList.contains('has-logo')) return;
+  av.classList.add('has-logo');
+  av.innerHTML = `<img src="${esc(logo)}" alt="" loading="lazy" referrerpolicy="no-referrer" />`;
+}
+
+// logo 加载失败 → 退回占位图标
+altsBox.addEventListener('error', e => {
+  const img = e.target;
+  if (!img || img.tagName !== 'IMG' || !img.closest('.avatar')) return;
+  const av = img.closest('.avatar');
+  av.classList.remove('has-logo');
+  av.innerHTML = TV_ICON;
+}, true);
+
 function renderSites(filter){
   const q = String(filter || '').trim().toLowerCase();
   const list = q
@@ -820,27 +883,26 @@ $('sitesCopy').addEventListener('click', () => {
   }, 1500);
 });
 
-/* 卡片上顺手预取一下站点数（只用直连，不惊动代理；失败就算了） */
+/* 卡片上顺手预取站点数 / logo（只用直连，失败就算了） */
 function prefetchCounts(){
   [...altsBox.querySelectorAll('.more')].forEach((btn, i) => {
     setTimeout(async () => {
       const url = btn.dataset.sites;
-      const cnt = btn.querySelector('.cnt');
-      if (!url || (cnt && !cnt.hidden)) return;
+      if (!url || btn.dataset.pf === '1') return;
+      btn.dataset.pf = '1';
       try {
+        let cfg;
         if (cfgCache.has(url)){
-          const cached = await cfgCache.get(url);
-          const n = sitesOf(cached).length;
-          if (n) setCardCount(url, n);
-          return;
+          cfg = await cfgCache.get(url);
+        } else {
+          const res = await fetch(url, { cache: 'no-store' });
+          if (!res.ok) return;
+          cfg = JSON.parse((await res.text()).replace(/^\uFEFF/, ''));
+          cfgCache.set(url, Promise.resolve(cfg));   // 顺手缓存，点开即显示
         }
-        const res = await fetch(url, { cache: 'no-store' });
-        if (!res.ok) return;
-        const cfg = JSON.parse((await res.text()).replace(/^\uFEFF/, ''));
+        if (cfg && cfg.logo) applyLogo(url, String(cfg.logo));
         const n = sitesOf(cfg).length;
-        if (!n) return;
-        cfgCache.set(url, Promise.resolve(cfg));   // 顺手缓存，点开即显示
-        setCardCount(url, n);
+        if (n) setCardCount(url, n);
       } catch (e) { /* 跨域/网络失败，忽略 */ }
     }, 700 + i * 800);
   });
