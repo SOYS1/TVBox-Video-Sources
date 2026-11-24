@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>4K 影视源 · TVBox 配置</title>
+<!--
+  ============================================================
+  维护说明
+  ------------------------------------------------------------
+  这个页面会自动读取同目录下的「4K视频源.md」。
+  以后只需要编辑那个 md 文件，本页面刷新后自动同步，无需改 index.html。
+
+  md 文件写法（每行一条，空行和 # 开头的行会被忽略）：
+      https://example.com/tvbox/4k.json
+      备用线路 | https://example.com/tvbox/backup.json
+
+  · 第一条 = 主配置地址（页面大按钮 + 二维码）
+  · 其余自动生成「线路2、线路3…」备选列表
+  ============================================================
+-->
+<style>
+  :root{
+    --bg:#07070b;
+    --card:#101018;
+    --line:rgba(255,255,255,.08);
+    --line-strong:rgba(255,255,255,.16);
+    --text:#f4f5f8;
+    --dim:#9b9bab;
+    --mute:#5f5f6d;
+    --accent:#7c5cff;
+    --accent2:#22d3ee;
+    --ok:#34d399;
+    --warn:#fbbf24;
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;min-height:100vh;background:var(--bg);color:var(--text);
+    font-family:system-ui,-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    -webkit-font-smoothing:antialiased;line-height:1.65;
+    display:flex;flex-direction:column;align-items:center;
+    padding:40px 20px 60px;
+  }
+  body::before{
+    content:"";position:fixed;inset:0;pointer-events:none;z-index:0;
+    background:
+      radial-gradient(50% 42% at 50% -8%, rgba(124,92,255,.26), transparent 70%),
+      radial-gradient(36% 30% at 88% 12%, rgba(34,211,238,.13), transparent 72%);
+  }
+  .wrap{position:relative;z-index:1;width:100%;max-width:860px}
+  a{color:inherit}
+  button{font:inherit;color:inherit;border:0;background:none;cursor:pointer}
+  ::selection{background:rgba(124,92,255,.45)}
+  :focus-visible{outline:2px solid var(--accent2);outline-offset:3px;border-radius:8px}
+
+  /* ---------- 顶部 ---------- */
+  .top{display:flex;align-items:center;gap:10px;justify-content:center;margin-bottom:26px;flex-wrap:wrap}
+  .pill{
+    display:inline-flex;align-items:center;gap:7px;font-size:12px;letter-spacing:.05em;
+    color:var(--dim);border:1px solid var(--line);border-radius:100px;
+    padding:6px 13px;background:rgba(255,255,255,.03);
+  }
+  .pill i{width:6px;height:6px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 3px rgba(52,211,153,.15)}
+  .pill.gold{color:#ffd479;border-color:rgba(255,212,121,.3)}
+  .pill.warn{color:var(--warn);border-color:rgba(251,191,36,.32)}
+  .pill.warn i{background:var(--warn);box-shadow:0 0 0 3px rgba(251,191,36,.15)}
+
+  /* ---------- 主卡片 ---------- */
+  .card{
+    background:var(--card);border:1px solid var(--line);border-radius:24px;
+    padding:34px 34px 30px;box-shadow:0 40px 90px -50px #000;
+  }
+  h1{margin:0;font-size:clamp(26px,4.4vw,36px);letter-spacing:-.025em;line-height:1.25}
+  h1 span{
+    background:linear-gradient(100deg,#fff 25%,#b9a8ff 60%,var(--accent2));
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+  }
+  .sub{margin:12px 0 0;color:var(--dim);font-size:14.5px}
+  .sub b{color:var(--text);font-weight:600}
+
+  .split{display:grid;grid-template-columns:1fr 190px;gap:26px;margin-top:26px;align-items:start}
+  .split > *{min-width:0}
+
+  /* 地址框 */
+  .field-label{
+    font-size:11.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--mute);
+    margin-bottom:9px;display:flex;align-items:center;gap:7px;
+  }
+  .field-label .src{
+    font-family:var(--mono);font-size:10px;letter-spacing:.04em;color:#8f7cff;
+    background:rgba(124,92,255,.14);border:1px solid rgba(124,92,255,.28);
+    padding:1px 6px;border-radius:4px;text-transform:none;
+  }
+  .url-box{
+    display:flex;align-items:center;gap:10px;min-width:0;
+    background:#08080e;border:1px solid var(--line-strong);border-radius:13px;
+    padding:13px 14px;transition:.2s;
+  }
+  .url-box:focus-within{border-color:rgba(124,92,255,.6);box-shadow:0 0 0 4px rgba(124,92,255,.12)}
+  .url-box input{
+    flex:1 1 auto;min-width:0;width:100%;background:none;border:0;outline:none;color:#dcdce8;
+    font-family:var(--mono);font-size:13px;letter-spacing:-.01em;
+  }
+  .copy-btn{
+    flex:none;padding:9px 16px;border-radius:9px;font-size:13px;font-weight:600;color:#0a0a10;
+    background:linear-gradient(135deg,#b3a5ff,var(--accent2));
+    transition:.18s;white-space:nowrap;
+  }
+  .copy-btn:hover{filter:brightness(1.08);transform:translateY(-1px)}
+  .copy-btn.done{background:var(--ok);color:#04140d}
+
+  .hint{margin:10px 0 0;font-size:12.5px;color:var(--mute)}
+  .hint b{color:var(--dim);font-weight:600}
+
+  /* 备用地址 */
+  .alts{margin-top:22px;display:flex;flex-direction:column;gap:8px}
+  .alt{
+    display:flex;align-items:center;gap:10px;padding:10px 12px;
+    border:1px solid var(--line);border-radius:11px;background:rgba(255,255,255,.022);
+    font-size:12.5px;transition:.16s;
+  }
+  .alt:hover{border-color:var(--line-strong);background:rgba(255,255,255,.05)}
+  .alt .tag-line{
+    flex:none;font-family:var(--mono);font-size:10.5px;font-weight:700;letter-spacing:.06em;
+    color:#c3b7ff;background:rgba(124,92,255,.18);border:1px solid rgba(124,92,255,.32);
+    padding:2px 7px;border-radius:5px;
+  }
+  .alt .u{flex:1;min-width:0;font-family:var(--mono);font-size:11.5px;color:var(--mute);
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .alt .cp{flex:none;font-size:12px;color:var(--dim);border:1px solid var(--line);
+    border-radius:7px;padding:4px 10px;transition:.16s}
+  .alt .cp:hover{color:#fff;background:rgba(255,255,255,.08)}
+
+  /* 二维码 */
+  .qr-wrap{text-align:center}
+  .qr{
+    background:#fff;border-radius:16px;padding:11px;display:grid;place-items:center;
+    aspect-ratio:1;width:100%;
+  }
+  .qr img{width:100%;height:100%;display:block;border-radius:4px}
+  .qr .ph{color:#8a8a99;font-size:11.5px;font-family:var(--mono);text-align:center;padding:8px}
+  .qr-cap{margin-top:9px;font-size:11.5px;color:var(--mute)}
+
+  /* ---------- 步骤 ---------- */
+  .steps{margin-top:34px;display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+  .step{
+    border:1px solid var(--line);border-radius:14px;padding:16px 16px 15px;
+    background:rgba(255,255,255,.022);
+  }
+  .step .n{
+    width:22px;height:22px;border-radius:7px;display:grid;place-items:center;
+    font-family:var(--mono);font-size:11.5px;font-weight:700;color:#0a0a10;
+    background:linear-gradient(135deg,#b3a5ff,var(--accent2));margin-bottom:10px;
+  }
+  .step h4{margin:0 0 4px;font-size:13.5px;font-weight:600}
+  .step p{margin:0;font-size:12.5px;color:var(--mute);line-height:1.6}
+
+  /* ---------- 统计 ---------- */
+  .stats{
+    margin-top:22px;display:grid;grid-template-columns:repeat(3,1fr);
+    border:1px solid var(--line);border-radius:14px;overflow:hidden;background:var(--line);
+    gap:1px;
+  }
+  .stat{background:var(--card);padding:14px 16px}
+  .stat b{display:block;font-size:19px;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+  .stat span{font-size:11.5px;color:var(--mute);letter-spacing:.04em}
+
+  /* 骨架 */
+  .skeleton{
+    height:44px;border-radius:11px;border:1px solid var(--line);
+    background:linear-gradient(90deg,rgba(255,255,255,.03),rgba(255,255,255,.07),rgba(255,255,255,.03));
+    background-size:200% 100%;animation:sk 1.2s ease-in-out infinite;
+  }
+  @keyframes sk{from{background-position:150% 0}to{background-position:-50% 0}}
+
+  /* ---------- 页脚 ---------- */
+  footer{margin-top:30px;text-align:center;font-size:12px;color:var(--mute);line-height:1.9}
+  footer b{color:var(--dim);font-weight:500}
+  footer .edit{font-family:var(--mono);font-size:11px;color:#4d4d59}
+
+  /* toast */
+  .toast{
+    position:fixed;left:50%;bottom:32px;transform:translate(-50%,18px);
+    background:#f4f5f8;color:#0a0a10;font-size:13px;font-weight:600;
+    padding:10px 18px;border-radius:100px;z-index:100;
+    opacity:0;pointer-events:none;transition:.22s;box-shadow:0 18px 40px -14px rgba(0,0,0,.8);
+  }
+  .toast.show{opacity:1;transform:translate(-50%,0)}
+
+  @media (max-width:760px){
+    body{padding:22px 14px 44px}
+    .card{padding:24px 20px 22px;border-radius:20px}
+    .split{grid-template-columns:1fr;gap:22px}
+    .qr-wrap{display:flex;flex-direction:column;align-items:center}
+    .qr{width:160px;padding:9px}
+    .qr-cap{margin-top:7px}
+    .steps{grid-template-columns:1fr}
+    .stats{grid-template-columns:1fr 1fr 1fr}
+    .stat{padding:12px 13px}
+    .stat b{font-size:16px}
+    .url-box{flex-wrap:wrap;gap:8px;padding:11px 12px}
+    .url-box input{width:100%;flex:1 1 100%}
+    .copy-btn{width:100%;text-align:center;padding:10px}
+  }
+  @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="top">
+    <span class="pill gold">4K ULTRA HD</span>
+    <span class="pill" id="statusPill"><i></i>正在读取源列表…</span>
+  </div>
+
+  <main class="card">
+    <h1><span>4K 影视源</span> · TVBox 配置</h1>
+    <p class="sub">
+      适用于 <b>TVBox</b> / <b>影视仓</b> / <b>OK影视</b> 等所有兼容壳子，复制下面地址填到「配置地址」即可。
+    </p>
+
+    <div class="split">
+      <div>
+        <div class="field-label">
+          配置地址 · 主线路
+          <span class="src" id="srcTag">4K视频源.md</span>
+        </div>
+        <div class="url-box">
+          <input id="mainUrl" type="text" readonly value="" placeholder="加载中…" spellcheck="false" />
+          <button class="copy-btn" id="copyMain">复制</button>
+        </div>
+        <p class="hint" id="hint">长按或点击地址可全选 · 建议使用 <b>影视仓</b> 最新版</p>
+
+        <div class="alts" id="alts">
+          <div class="skeleton"></div>
+          <div class="skeleton" style="width:88%"></div>
+        </div>
+      </div>
+
+      <div class="qr-wrap">
+        <div class="qr" id="qrBox">
+          <img id="qrImg" alt="配置地址二维码" />
+        </div>
+        <div class="qr-cap">扫码导入</div>
+      </div>
+    </div>
+
+    <div class="steps">
+      <div class="step">
+        <div class="n">1</div>
+        <h4>复制地址</h4>
+        <p>点「复制」拿到主线路的 JSON 配置地址。</p>
+      </div>
+      <div class="step">
+        <div class="n">2</div>
+        <h4>填入配置</h4>
+        <p>打开 TVBox → 设置 → 配置地址 → 粘贴 → 确定。</p>
+      </div>
+      <div class="step">
+        <div class="n">3</div>
+        <h4>重启生效</h4>
+        <p>返回首页等待加载完成，即可在「点播」里浏览。</p>
+      </div>
+    </div>
+
+    <div class="stats">
+      <div class="stat"><b id="statLines">—</b><span>可用线路</span></div>
+      <div class="stat"><b>2160p</b><span>最高画质</span></div>
+      <div class="stat"><b id="statUpdated">—</b><span>源文件更新</span></div>
+    </div>
+  </main>
+
+  <footer>
+    <b>本页仅提供配置索引，不存储、不传播任何影视文件。</b><br />
+    所有内容均来自第三方公开接口，请在 24 小时内删除并支持正版。<br />
+    <span class="edit">源列表：4K视频源.md · 页面自动同步</span>
+  </footer>
+</div>
+
+<div class="toast" id="toast">已复制</div>
+
+<script>
+/* ======================= 配置 ======================= */
+// 源列表文件（与 index.html 同目录，改这个文件即可）
+const SOURCE_FILE = '4K视频源.md';
+
+// 读取失败时的兜底（file:// 直接打开会被浏览器拦截 fetch）
+const FALLBACK_URLS = [
+  'https://9280.kstore.vip/aiwex.json',
+  'https://700sjro44343.vicp.fun/240731/one/'
+];
+
+/* ======================= 工具 ======================= */
+const $ = id => document.getElementById(id);
+const mainInput = $('mainUrl');
+const altsBox = $('alts');
+const statusPill = $('statusPill');
+const toast = $('toast');
+let toastTimer;
+
+function showToast(msg){
+  toast.textContent = msg || '已复制';
+  toast.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toast.classList.remove('show'), 1600);
+}
+
+function copy(text){
+  const ok = () => showToast('已复制，去 TVBox 粘贴');
+  const fallback = () => {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy'); } catch(e){}
+    ta.remove();
+    ok();
+  };
+  if (navigator.clipboard && window.isSecureContext){
+    navigator.clipboard.writeText(text).then(ok).catch(fallback);
+  } else fallback();
+}
+
+/* ======================= 解析 md ======================= */
+/**
+ * 每行一条：
+ *   https://xxx/a.json
+ *   显示名 | https://xxx/b.json
+ * 忽略空行、# 开头的注释行、``` 代码围栏
+ */
+function parseSources(text){
+  return String(text || '')
+    .split(/\r?\n/)
+    .map(line => line.trim())
+    .filter(line => line && !line.startsWith('#') && !line.startsWith('//') && !line.startsWith('```'))
+    .map(line => {
+      const m = line.split('|');
+      if (m.length >= 2){
+        const label = m[0].trim().replace(/^[-*]\s*/, '');
+        const url = m.slice(1).join('|').trim();
+        return { label, url };
+      }
+      // 兼容 markdown 列表 "- https://..."
+      const url = line.replace(/^[-*]\s*/, '').trim();
+      return { label: '', url };
+    })
+    .filter(item => /^https?:\/\//i.test(item.url));
+}
+
+/* ======================= 渲染 ======================= */
+let currentUrls = [];
+
+function render(list, fromFile){
+  currentUrls = list.map(i => i.url);
+
+  if (!list.length){
+    mainInput.value = '';
+    mainInput.placeholder = '源列表为空，请检查 ' + SOURCE_FILE;
+    altsBox.innerHTML = '<div class="hint" style="margin-top:0">没解析到有效地址，确认每行是 https:// 开头的链接。</div>';
+    $('statLines').textContent = '0';
+    setStatus('源列表为空', 'warn');
+    return;
+  }
+
+  // 主线路
+  mainInput.value = list[0].url;
+  mainInput.title = list[0].url;
+  buildQR(list[0].url);
+
+  // 备选线路
+  const rest = list.slice(1);
+  altsBox.innerHTML = rest.length
+    ? rest.map((item, i) => `
+        <div class="alt">
+          <span class="tag-line">${item.label || '线路' + (i + 2)}</span>
+          <span class="u" title="${esc(item.url)}">${esc(item.url)}</span>
+          <button class="cp" data-url="${esc(item.url)}">复制</button>
+        </div>`).join('')
+    : '<div class="hint" style="margin-top:0">暂无备用线路，在 md 里加一行即可自动出现。</div>';
+
+  altsBox.querySelectorAll('[data-url]').forEach(b => {
+    b.addEventListener('click', () => copy(b.dataset.url));
+  });
+
+  $('statLines').textContent = list.length;
+  setStatus(fromFile ? `已同步 · ${list.length} 条线路` : `离线兜底 · ${list.length} 条线路`, fromFile ? 'ok' : 'warn');
+}
+
+function esc(s){
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function setStatus(text, type){
+  statusPill.className = 'pill' + (type === 'warn' ? ' warn' : '');
+  statusPill.innerHTML = '<i></i>' + esc(text);
+}
+
+function buildQR(url){
+  const box = $('qrBox');
+  const img = new Image();
+  img.id = 'qrImg';
+  img.alt = '配置地址二维码';
+  img.onerror = () => {
+    box.innerHTML = '<div class="ph">二维码<br/>需联网生成<br/>可直接复制地址</div>';
+  };
+  img.src = 'https://api.qrserver.com/v1/create-qr-code/?size=300x300&margin=0&data=' + encodeURIComponent(url);
+  box.innerHTML = '';
+  box.appendChild(img);
+}
+
+/* ======================= 交互 ======================= */
+$('copyMain').addEventListener('click', function(){
+  if (!mainInput.value) return;
+  copy(mainInput.value.trim());
+  this.classList.add('done');
+  this.textContent = '已复制';
+  setTimeout(() => { this.classList.remove('done'); this.textContent = '复制'; }, 1500);
+});
+
+mainInput.addEventListener('click', () => mainInput.select());
+
+/* ======================= 最后更新时间 ======================= */
+const fmtDate = v => {
+  const d = new Date(v);
+  if (isNaN(d)) return null;
+  return `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
+// 在 github.io 上取该文件的最后一次 commit 时间；其它环境用响应头
+async function updateStamp(res){
+  const el = $('statUpdated');
+
+  // 1) 普通静态服务器：Last-Modified
+  const lm = res && res.headers.get('last-modified');
+  if (lm){ const t = fmtDate(lm); if (t){ el.textContent = t; return; } }
+
+  // 2) GitHub Pages：查提交记录
+  const host = location.hostname.match(/^([^.]+)\.github\.io$/i);
+  if (host){
+    const owner = host[1];
+    const seg = location.pathname.split('/').filter(Boolean)[0];
+    const repo = seg || (owner + '.github.io');
+    try{
+      const r = await fetch(
+        `https://api.github.com/repos/${owner}/${repo}/commits?path=${encodeURIComponent(SOURCE_FILE)}&per_page=1`,
+        { headers: { 'Accept': 'application/vnd.github+json' } }
+      );
+      if (r.ok){
+        const arr = await r.json();
+        const t = arr[0] && fmtDate(arr[0].commit.committer.date);
+        if (t){ el.textContent = t; return; }
+      }
+    }catch(e){}
+  }
+  el.textContent = '—';
+}
+
+/* ======================= 启动：读取 md 并渲染 ======================= */
+(async function init(){
+  // 先把兜底数据显示出来，避免空白 / 首屏闪烁
+  render(parseSources(FALLBACK_URLS.join('\n')), false);
+
+  try {
+    const res = await fetch(encodeURI(SOURCE_FILE), { cache: 'no-store' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+
+    const text = await res.text();
+    const list = parseSources(text);
+    if (!list.length) throw new Error('empty');
+
+    render(list, true);
+    await updateStamp(res);
+  } catch (err) {
+    // file:// 打开、或文件缺失时走兜底
+    $('statUpdated').textContent = '—';
+    $('hint').innerHTML =
+      '读取 <b>' + SOURCE_FILE + '</b> 失败（本地双击打开时浏览器会拦截），当前显示内置兜底列表；' +
+      '部署到 GitHub Pages 后会自动同步。';
+  }
+})();
+</script>
+</body>
+</html>
