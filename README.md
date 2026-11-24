@@ -46,7 +46,7 @@ https://9280.kstore.vip/aiwex.json
 
 | 写法 | 效果 |
 | --- | --- |
-| `https://a.com/x.json` | 一条源（序号 01、02…自动生成） |
+| `https://a.com/x.json` | 一条源（不写名称时卡片只显示这条链接） |
 | `名称 \| https://b.com/y.json` | 给这条源加显示名称 |
 | `名称 \| https://b.com/y.json \| https://b.com/logo.png` | 再指定卡片上的 logo |
 | `https://b.com/y.json \| https://b.com/logo.gif` | 不写名称，只加 logo |
