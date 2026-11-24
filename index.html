@@ -297,6 +297,11 @@
   .s-type.json{color:#8ee9f7;background:rgba(34,211,238,.12);border-color:rgba(34,211,238,.28)}
   .s-type.xml{color:#ffd479;background:rgba(251,191,36,.12);border-color:rgba(251,191,36,.3)}
   .s-type.ext{color:#8ef0c6;background:rgba(52,211,153,.12);border-color:rgba(52,211,153,.3)}
+  .s-type.grp{
+    font-family:inherit;letter-spacing:0;text-transform:none;font-size:10px;
+    color:#b9b3cc;background:rgba(255,255,255,.05);border-color:var(--line);
+    max-width:86px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  }
   .panel-foot{padding:10px 16px 14px;border-top:1px solid var(--line)}
   .panel-foot .btn{width:100%;display:block}
   .panel-state{padding:28px 20px;text-align:center;font-size:12.5px;color:var(--mute);line-height:1.8}
@@ -611,6 +616,7 @@ function setStatus(text, type){
 // 单张卡片（不显示域名，只显示手动写的名称 + 链接）
 function cardHTML(item, n){
   const title = (item.label || '').trim();
+  const list = isPlaylist(item.url);
   const avatar = item.logo
     ? `<span class="avatar has-logo"><img src="${esc(item.logo)}" alt="" loading="lazy" referrerpolicy="no-referrer" /></span>`
     : `<span class="avatar">${TV_ICON}</span>`;
@@ -632,9 +638,9 @@ function cardHTML(item, n){
           <button type="button" class="btn qr" data-qr="${esc(item.url)}">二维码</button>
         </div>
       </div>
-      ${isPlaylist(item.url) ? '' : `
-      <button type="button" class="more" data-sites="${esc(item.url)}" data-name="${esc(title)}">
-        <span>查看包含的源</span>
+      ${`
+      <button type="button" class="more" data-sites="${esc(item.url)}" data-name="${esc(title)}" data-type="${list ? 'list' : 'config'}">
+        <span>${list ? '查看频道列表' : '查看包含的源'}</span>
         <span class="cnt" hidden></span>
         <span class="arw">›</span>
       </button>`}
@@ -722,7 +728,7 @@ catsBox.addEventListener('click', e => {
 
   const moreBtn = e.target.closest('[data-sites]');
   if (moreBtn){
-    openSites(moreBtn.dataset.sites, moreBtn.dataset.name);
+    openSites(moreBtn.dataset.sites, moreBtn.dataset.name, moreBtn.dataset.type);
     return;
   }
 
@@ -856,14 +862,15 @@ function loadConfig(url){
   return job;
 }
 
-let sitesData = [];
+let panelData = [];        // 当前弹层的数据（站点 或 频道）
+let panelMode = 'sites';   // sites | channels
 let sitesUrl = '';
 
-function setCardCount(url, n){
+function setCardCount(url, n, unit){
   catsBox.querySelectorAll('.more').forEach(btn => {
     if (btn.dataset.sites !== url) return;
     const cnt = btn.querySelector('.cnt');
-    if (cnt){ cnt.textContent = n + ' 源'; cnt.hidden = false; }
+    if (cnt){ cnt.textContent = n + ' ' + (unit || '源'); cnt.hidden = false; }
   });
 }
 
@@ -895,12 +902,82 @@ catsBox.addEventListener('error', e => {
   av.innerHTML = TV_ICON;
 }, true);
 
+/* 解析播放列表：m3u（#EXTINF + 地址）和 TXT（名称,地址 / #genre# 分组） */
+function parsePlaylist(text){
+  const out = [];
+  let cur = null;
+  const attrOf = (line, key) => {
+    const m = line.match(new RegExp(key + '="([^"]*)"'));
+    return m ? m[1].trim() : '';
+  };
+  const isStream = s => /^(https?|rtmp|rtsp|rtp|udp|mms):\/\//i.test(s);
+
+  for (const raw of String(text || '').split(/\r?\n/)){
+    const line = raw.trim();
+    if (!line) continue;
+
+    if (/^#EXTINF/i.test(line)){
+      const comma = line.lastIndexOf(',');
+      const disp = comma >= 0 ? line.slice(comma + 1).trim() : '';
+      cur = {
+        name: attrOf(line, 'tvg-name') || disp || attrOf(line, 'tvg-id') || '未命名频道',
+        id: attrOf(line, 'tvg-id'),
+        group: attrOf(line, 'group-title'),
+        logo: attrOf(line, 'tvg-logo'),
+        catchup: /catchup="(append|default|shift)"/i.test(line)
+      };
+      continue;
+    }
+
+    if (line.startsWith('#')){
+      // #genre# 之类的分组标记，不影响当前条目
+      continue;
+    }
+
+    if (isStream(line)){
+      if (cur){ cur.url = line; out.push(cur); cur = null; }
+      else out.push({ name: line, id: '', group: '', logo: '', url: line });
+      continue;
+    }
+
+    // TXT 写法：频道名,地址
+    const c = line.indexOf(',');
+    if (c > 0){
+      const nm = line.slice(0, c).trim();
+      const u = line.slice(c + 1).trim();
+      if (isStream(u)){ out.push({ name: nm || u, id: '', group: '', logo: '', url: u }); cur = null; }
+    }
+  }
+  return out;
+}
+
 function renderSites(filter){
   const q = String(filter || '').trim().toLowerCase();
-  const list = q
-    ? sitesData.filter(s => (s.name + ' ' + s.key).toLowerCase().includes(q))
-    : sitesData;
   const box = $('sitesList');
+
+  if (panelMode === 'channels'){
+    const list = q
+      ? panelData.filter(c => (c.name + ' ' + c.id + ' ' + c.group).toLowerCase().includes(q))
+      : panelData;
+    if (!list.length){
+      box.innerHTML = '<div class="panel-state">没有匹配的频道</div>';
+      return;
+    }
+    box.innerHTML = list.map((c, i) => `
+      <div class="site">
+        <span class="s-idx">${String(i + 1).padStart(2, '0')}</span>
+        <div class="s-main">
+          <div class="s-name" title="${esc(c.name)}">${esc(c.name)}</div>
+          <div class="s-key" title="${esc([c.id, c.group].filter(Boolean).join(' · '))}">${esc([c.id, c.group].filter(Boolean).join(' · ') || '—')}${c.catchup ? ' · 支持回看' : ''}</div>
+        </div>
+        ${c.group ? `<span class="s-type grp" title="${esc(c.group)}">${esc(c.group.length > 6 ? c.group.slice(0, 6) + '…' : c.group)}</span>` : ''}
+      </div>`).join('');
+    return;
+  }
+
+  const list = q
+    ? panelData.filter(s => (s.name + ' ' + s.key).toLowerCase().includes(q))
+    : panelData;
 
   if (!list.length){
     box.innerHTML = '<div class="panel-state">没有匹配的站点</div>';
@@ -918,13 +995,68 @@ function renderSites(filter){
     </div>`).join('');
 }
 
-async function openSites(url, name){
+// 播放列表：列出频道
+async function openChannels(url, name){
+  panelMode = 'channels';
+  panelData = [];
   sitesUrl = url;
-  sitesData = [];
+  $('sitesTitle').textContent = (name || '').trim() || '频道列表';
+  $('sitesSub').textContent = '正在读取播放列表…';
+  $('sitesSearchWrap').hidden = true;
+  $('sitesSearch').value = '';
+  $('sitesSearch').placeholder = '搜索频道名称 / tvg-id / 分组…';
+  $('sitesList').innerHTML = '<div class="panel-state">正在读取播放列表…</div>';
+  $('sitesCopy').textContent = '复制地址';
+  $('sitesCopy').classList.remove('done');
+  openModal($('sitesModal'));
+
+  try {
+    let text = await fetchTxt(url, 25000);
+
+    // 有些 m3u 通过 #EXT-X-SUB-URL 指向真正的列表
+    const sub = (text.match(/^#EXT-X-SUB-URL\s+(\S+)/im) || [])[1];
+    if (sub && /^https?:\/\//i.test(sub)) text = await fetchTxt(sub, 25000);
+
+    panelData = parsePlaylist(text);
+    const groups = [...new Set(panelData.map(c => c.group).filter(Boolean))];
+
+    if (!panelData.length){
+      $('sitesSub').textContent = '没解析到频道';
+      $('sitesList').innerHTML = '<div class="panel-state">这个列表里没解析出频道（可能不是播放列表，或格式不常见）。</div>';
+      return;
+    }
+
+    const bits = [`<b>${panelData.length}</b> 个频道`];
+    if (groups.length) bits.push(`<b>${groups.length}</b> 个分组`);
+    $('sitesSub').innerHTML = bits.join(' · ');
+    $('sitesSearchWrap').hidden = panelData.length < 8;
+    setCardCount(url, panelData.length, '频道');
+    renderSites('');
+  } catch (err) {
+    $('sitesSub').textContent = '读取失败';
+    $('sitesList').innerHTML =
+      `<div class="panel-state">
+         没能读取这个播放列表（网络或服务器限制）。<br/>
+         <b>不影响使用</b>：复制地址填到 TVBox 里照常能看。<br/>
+         <a href="${esc(url)}" target="_blank" rel="noreferrer noopener">直接打开列表</a>
+         <button type="button" class="retry" id="sitesRetry">重试</button>
+       </div>`;
+    const retry = $('sitesRetry');
+    if (retry) retry.onclick = () => openChannels(url, name);
+  }
+}
+
+async function openSites(url, name, type){
+  if (type === 'list') return openChannels(url, name);
+
+  panelMode = 'sites';
+  panelData = [];
+  sitesUrl = url;
   $('sitesTitle').textContent = (name || '').trim() || '包含的源';
   $('sitesSub').textContent = '正在读取配置…';
   $('sitesSearchWrap').hidden = true;
   $('sitesSearch').value = '';
+  $('sitesSearch').placeholder = '搜索站点名称或 key…';
   $('sitesList').innerHTML = '<div class="panel-state">正在读取配置…</div>';
   $('sitesCopy').textContent = '复制配置地址';
   $('sitesCopy').classList.remove('done');
@@ -940,7 +1072,7 @@ async function openSites(url, name){
     }
 
     const rawSites = sitesOf(cfg);
-    sitesData = rawSites.slice(0, 500).map(s => {
+    panelData = rawSites.slice(0, 500).map(s => {
       const o = s || {};
       const key = o.key == null ? '' : String(o.key);
       return {
@@ -953,28 +1085,22 @@ async function openSites(url, name){
 
     const lives = Array.isArray(cfg && cfg.lives) ? cfg.lives.length : 0;
     const parses = Array.isArray(cfg && cfg.parses) ? cfg.parses.length : 0;
-    const bits = [`<b>${sitesData.length}</b> 个站点`];
+    const bits = [`<b>${panelData.length}</b> 个站点`];
     if (lives) bits.push(`<b>${lives}</b> 个直播`);
     if (parses) bits.push(`<b>${parses}</b> 个解析`);
     $('sitesSub').innerHTML = bits.join(' · ');
 
-    if (!sitesData.length){
+    if (!panelData.length){
       $('sitesList').innerHTML = '<div class="panel-state">这个配置里没有 <b>sites</b> 列表。</div>';
     } else {
-      setCardCount(url, sitesData.length);
-      $('sitesSearchWrap').hidden = sitesData.length < 8;
+      setCardCount(url, panelData.length, '源');
+      $('sitesSearchWrap').hidden = panelData.length < 8;
       renderSites('');
     }
   } catch (err) {
-    // 播放列表（m3u）本来就没有站点清单
+    // 判断失误：地址其实是播放列表 → 直接按频道列表展示
     if (err && err.code === NOT_JSON){
-      $('sitesSub').textContent = '这是播放列表，没有站点清单';
-      $('sitesList').innerHTML =
-        `<div class="panel-state">
-           这条地址是 <b>播放列表</b>（m3u 等），不是 TVBox 配置，所以没有站点清单。<br/>
-           直接复制地址用就行，不影响观看。
-         </div>`;
-      return;
+      return openChannels(url, name);
     }
     // 跨域读不到属于正常情况：配置照样能直接用，这里只是看不了清单
     $('sitesSub').textContent = '清单不可用 · 不影响使用';
