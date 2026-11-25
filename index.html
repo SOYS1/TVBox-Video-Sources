@@ -826,12 +826,39 @@ async function fetchTxt(target, ms){
 
 const NOT_JSON = 'NOT_JSON';
 
+/* 直连拿不到就换镜像：raw.githubusercontent.com 在国内经常被拦，ghproxy 是好用的镜像 */
+function mirrorPlan(url){
+  const list = [url];
+  if (/^https:\/\/raw\.githubusercontent\.com\//i.test(url)){
+    list.push('https://ghproxy.net/' + url.replace(/^https:\/\//i, ''));
+  }
+  for (const fn of CORS_PROXIES) list.push(fn(url));
+  return list;
+}
+
+/**
+ * 依次尝试 直连 → 镜像 → 公共代理，返回第一个拿到的文本。
+ * onTry(name) 用来在弹层里显示当前进度。
+ */
+async function fetchTextAny(url, ms, onTry){
+  const tries = mirrorPlan(url);
+  let lastErr;
+  for (let i = 0; i < tries.length; i++){
+    const name = i === 0 ? '直连' : (i === 1 && /ghproxy/.test(tries[1]) ? '镜像' : '代理' + i);
+    if (onTry) onTry(name);
+    try {
+      return await fetchTxt(tries[i], ms || 14000);
+    } catch (err) { lastErr = err; }
+  }
+  throw lastErr || new Error('读取失败');
+}
+
 // 取配置 JSON：先直连（支持 CORS 的源），失败再走公共代理
 function loadConfig(url){
   if (cfgCache.has(url)) return cfgCache.get(url);
 
   const job = (async () => {
-    const tries = [url, ...CORS_PROXIES.map(fn => fn(url))];
+    const tries = mirrorPlan(url);
     let lastErr;
     for (const target of tries){
       let text;
@@ -1011,13 +1038,28 @@ async function openChannels(url, name){
   openModal($('sitesModal'));
 
   try {
-    let text = await fetchTxt(url, 25000);
+    // 直连 → ghproxy 镜像 → 公共代理，逐级退让
+    let text = await fetchTextAny(url, 14000, how => {
+      $('sitesSub').textContent = `正在读取播放列表…（${how}）`;
+    });
 
-    // 有些 m3u 通过 #EXT-X-SUB-URL 指向真正的列表
-    const sub = (text.match(/^#EXT-X-SUB-URL\s+(\S+)/im) || [])[1];
-    if (sub && /^https?:\/\//i.test(sub)) text = await fetchTxt(sub, 25000);
+    let chans = parsePlaylist(text);
 
-    panelData = parsePlaylist(text);
+    // 本体没解析出频道时，才去跟 #EXT-X-SUB-URL 指的子列表
+    if (!chans.length){
+      const sub = (text.match(/^#EXT-X-SUB-URL\s+(\S+)/im) || [])[1];
+      if (sub && /^https?:\/\//i.test(sub)){
+        try {
+          const subText = await fetchTextAny(sub, 14000, how => {
+            $('sitesSub').textContent = `正在读取子列表…（${how}）`;
+          });
+          const subChans = parsePlaylist(subText);
+          if (subChans.length) chans = subChans;
+        } catch (e) { /* 子列表拿不到就用本体的 */ }
+      }
+    }
+
+    panelData = chans;
     const groups = [...new Set(panelData.map(c => c.group).filter(Boolean))];
 
     if (!panelData.length){
@@ -1033,10 +1075,11 @@ async function openChannels(url, name){
     setCardCount(url, panelData.length, '频道');
     renderSites('');
   } catch (err) {
+    const gh = /^https:\/\/raw\.githubusercontent\.com\//i.test(url);
     $('sitesSub').textContent = '读取失败';
     $('sitesList').innerHTML =
       `<div class="panel-state">
-         没能读取这个播放列表（网络或服务器限制）。<br/>
+         直连和镜像都没能读取这个播放列表${gh ? '（GitHub 原始地址在国内经常被拦）' : ''}。<br/>
          <b>不影响使用</b>：复制地址填到 TVBox 里照常能看。<br/>
          <a href="${esc(url)}" target="_blank" rel="noreferrer noopener">直接打开列表</a>
          <button type="button" class="retry" id="sitesRetry">重试</button>
