@@ -1,0 +1,17 @@
+# 本地调试 / 排障残留，不进仓库，也不发布
+_relay*.py
+_t.html
+
+# 工具与缓存
+__pycache__/
+*.pyc
+.DS_Store
+Thumbs.db
+
+# 构建产物（pages.yml 会把白名单文件拷到这里再上传）
+dist/
+
+# WorkBuddy 工作目录（报告、记忆等）
+.workbuddy/
+
+# 注意：status.json 不要忽略，源健康检查的结果靠它提交上线

@@ -28,6 +28,26 @@
 - **二维码**：扫码导入，适合电视端
 - **查看包含的源**：列出这条配置里收录的站点（站名 / key / 类型），可搜索
   - 只支持允许浏览器跨域读取的源；看不了**不影响使用**，复制地址照常能用
+- **12 小时缓存**：站点清单 / 频道列表读一次就存在浏览器本地，12 小时内再点开是秒出，不重新请求
+  - 弹层标题旁的「缓存」小标就是提醒这个；想看最新点「重试」强制刷新
+- **「暂时无法使用」**：每天自动探测一次各源，确实打不开的卡片上会直接写明，不用点进去才知道
+
+## 源可用状态
+
+每天北京时间 12:00 自动跑一次 [`.github/workflows/check-sources.yml`](./.github/workflows/check-sources.yml)，
+逐个请求 `4K视频源.md` / `直播源.md` 里的地址，结果写进 `status.json`：
+
+```bash
+python3 scripts/check_sources.py            # 有变化才写 status.json
+python3 scripts/check_sources.py --force    # 强制重写
+python3 scripts/check_sources.py --dry-run  # 只看结果，不写文件
+```
+
+- 判定很保守：只有 **404 / 410 / 5xx / 连不上 / 超时** 才算失败
+- **403 / 429 / 503** 这类多半是拦爬虫，记为「未知」，不会误标成不可用
+- 状态没变化就不提交，所以不会天天多一条 commit
+- 探测是在 GitHub 的机器上跑的，**不代表你本地网络**；国内连 GitHub 原始地址经常不通，这种情况页面会走镜像兜底
+
 
 ## 怎么更新源
 
@@ -66,9 +86,14 @@ https://9280.kstore.vip/aiwex.json
   icon: '🎵',                   // 分区图标
   desc: '一句话说明',            // 标题旁灰字
   file: '音乐源.md',            // 数据文件
+  tag: 'MUSIC',                // 卡片右上角的类型标记
+  quality: '',                 // 画质标记，留空不显示（直播源就不标画质）
   note: '填写说明（可选）'        // 分区顶部小字
 }
 ```
+
+加完记得把新文件名加进 `scripts/check_sources.py` 顶部的 `FILES`，
+否则每日健康检查不会覆盖这个分区（工作流本身是按 `*.md` 自动发布的，不用改）。
 
 ### 卡片 logo
 
@@ -85,16 +110,23 @@ https://9280.kstore.vip/aiwex.json
 
 ```
 .
-├── index.html                     # 页面
-├── 4K视频源.md                     # 影视源分区
-├── 直播源.md                       # 直播源分区
-├── .github/workflows/pages.yml    # 推送 main 自动部署
+├── index.html                          # 页面（唯一的代码文件）
+├── 4K视频源.md                          # 影视源分区
+├── 直播源.md                            # 直播源分区
+├── status.json                         # 源可用状态（脚本生成，别手改）
+├── scripts/check_sources.py            # 探测各源是否还能打开
+├── .github/workflows/pages.yml         # 推送 main 自动部署
+├── .github/workflows/check-sources.yml # 每天 12:00 探测源状态
+├── .gitignore
 └── README.md
 ```
 
 ## 部署
 
 推送到 `main` 即自动发布（工作流已配好）。首次需在 **Settings → Pages → Source** 选择 `GitHub Actions`。
+
+部署时只会把 **`index.html` + 各分区 md + `status.json`** 拷到 `dist/` 再上传，
+其它文件（调试脚本、工具、`.workbuddy/` 之类）不会出现在线上，也不会被直接访问到。
 
 - 仓库必须 **Public**，私有仓库的 Pages 对外打不开，TVBox 也拿不到
 - Pages 有 CDN 缓存，改完 `4K视频源.md` 最长约 10 分钟生效，急用可加 `?v=2` 强制刷新

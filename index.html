@@ -4,6 +4,11 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>4K 影视源 · TVBox 配置</title>
+<meta name="description" content="TVBox / 影视仓 / OK影视 的配置索引页，按分区整理影视源与直播源，一键复制地址或扫码导入。" />
+<meta property="og:type" content="website" />
+<meta property="og:title" content="TVBox 配置 · 影视 / 直播源" />
+<meta property="og:description" content="按分区整理的 TVBox 配置地址，任选一条复制到「配置地址」即可。" />
+<meta name="theme-color" content="#07070b" />
 <!--
   ============================================================
   维护说明
@@ -195,6 +200,37 @@
     background:rgba(0,0,0,.38);
   }
   .uhd{font-family:var(--mono);font-size:9.5px;letter-spacing:.16em;color:#8ee9f7}
+
+  /* 源不可用（由 status.json 标记，不用红点，直接写清楚） */
+  .src.offline{
+    border-color:rgba(251,191,36,.28);
+  }
+  .src.offline .cover{
+    background:
+      radial-gradient(120% 150% at 8% -30%, rgba(120,120,140,.4), transparent 60%),
+      linear-gradient(165deg,#1a1a22,#0b0b12);
+  }
+  .src.offline .cover::after{color:rgba(255,255,255,.045)}
+  .src.offline .avatar{filter:grayscale(.7);opacity:.75}
+  .src.offline .src-url{color:#7a7a86}
+  .flag{
+    display:flex;align-items:center;gap:6px;flex-wrap:wrap;
+    margin:0;padding:7px 10px;border-radius:9px;
+    font-size:11.5px;line-height:1.5;color:#ffd479;
+    border:1px solid rgba(251,191,36,.26);
+    background:linear-gradient(180deg,rgba(251,191,36,.1),rgba(251,191,36,.04));
+  }
+  .flag b{color:#ffe3a3;font-weight:600}
+  .flag .sug{color:#b7b3a4}
+  /* display:flex 会盖掉 hidden 属性的 display:none，这里显式补回来 */
+  .flag[hidden]{display:none}
+
+  /* 弹层顶部的「缓存」标记 */
+  .stale{
+    display:inline-block;margin-left:4px;font-family:var(--mono);font-size:9.5px;
+    letter-spacing:.06em;color:#8b93a6;border:1px solid var(--line);border-radius:4px;
+    padding:0 4px;line-height:15px;cursor:help;
+  }
 
   /* 卡片主体 */
   .body{display:flex;flex-direction:column;gap:10px;padding:13px 14px 14px;flex:1;min-width:0}
@@ -440,7 +476,7 @@
 
     <div class="stats">
       <div class="stat"><b id="statLines">—</b><span>可用源</span></div>
-      <div class="stat"><b>2160p</b><span>最高画质</span></div>
+      <div class="stat"><b id="statCats">—</b><span>分区数</span></div>
       <div class="stat"><b id="statUpdated">—</b><span>源文件更新</span></div>
     </div>
   </main>
@@ -489,6 +525,9 @@
  * 分区配置（与 index.html 同目录）。
  * 想加分区，往这里加一条即可；每个分区一个独立的 md 文件。
  * file 不存在的分区会自动跳过，不会报错。
+ *
+ * tag     —— 卡片右上角的类型标记（按分区配置，别再靠扩展名猜）
+ * quality —— 卡片上的画质标记，留空就不显示（直播源不标画质）
  */
 const CATEGORIES = [
   {
@@ -497,6 +536,8 @@ const CATEGORIES = [
     icon: '🎬',
     desc: '点播用的配置，需登录网盘',
     file: '4K视频源.md',
+    tag: 'TVBOX',
+    quality: '4K',
     note: '适用于 TVBox / 影视仓 / OK影视，任选其一填到「配置地址」。'
   },
   {
@@ -505,6 +546,8 @@ const CATEGORIES = [
     icon: '📺',
     desc: '直播 / 电视直播列表，导入即用',
     file: '直播源.md',
+    tag: 'LIVE',
+    quality: '',
     note: '多行文本形式的播放列表，TVBox 里「配置地址」或「直播源」处添加即可。'
   }
 ];
@@ -539,8 +582,8 @@ function esc(s){
 function kindOf(u){
   try {
     const m = new URL(u).pathname.match(/\.([a-z0-9]{2,6})$/i);
-    return m ? m[1].toUpperCase() : 'JSON';
-  } catch(e){ return 'JSON'; }
+    return m ? m[1].toUpperCase() : '';   // 没扩展名就返回空，别硬猜成 JSON
+  } catch(e){ return ''; }
 }
 
 function copy(text){
@@ -614,42 +657,45 @@ function setStatus(text, type){
 }
 
 // 单张卡片（不显示域名，只显示手动写的名称 + 链接）
-function cardHTML(item, n){
+function cardHTML(item, n, cat){
   const title = (item.label || '').trim();
   const list = isPlaylist(item.url);
+  // 类型标记按分区配置，不再靠扩展名猜（无扩展名的订阅地址会被误判成 JSON）
+  const tag = (cat && cat.tag) || kindOf(item.url) || 'LINK';
+  const quality = (cat && cat.quality) || '';
   const avatar = item.logo
     ? `<span class="avatar has-logo"><img src="${esc(item.logo)}" alt="" loading="lazy" referrerpolicy="no-referrer" /></span>`
     : `<span class="avatar">${TV_ICON}</span>`;
 
   return `
-    <article class="src">
+    <article class="src" data-url="${esc(item.url)}">
       <div class="cover" data-idx="${String(n).padStart(2, '0')}">
         ${avatar}
         <span class="cover-meta">
-          <span class="kind">${esc(kindOf(item.url))}</span>
-          <span class="uhd">2160P</span>
+          <span class="kind">${esc(tag)}</span>
+          ${quality ? `<span class="uhd">${esc(quality)}</span>` : ''}
         </span>
       </div>
       <div class="body">
         ${title ? `<h3 class="src-title" title="${esc(title)}">${esc(title)}</h3>` : ''}
         <p class="src-url" title="${esc(item.url)}">${esc(item.url)}</p>
+        <p class="flag" data-flag hidden></p>
         <div class="src-actions">
           <button type="button" class="btn cp" data-copy="${esc(item.url)}">复制地址</button>
           <button type="button" class="btn qr" data-qr="${esc(item.url)}">二维码</button>
         </div>
       </div>
-      ${`
       <button type="button" class="more" data-sites="${esc(item.url)}" data-name="${esc(title)}" data-type="${list ? 'list' : 'config'}">
         <span>${list ? '查看频道列表' : '查看包含的源'}</span>
         <span class="cnt" hidden></span>
         <span class="arw">›</span>
-      </button>`}
+      </button>
     </article>`;
 }
 
 // 一个分区
 function catHTML(cat, list){
-  const cards = list.map(item => cardHTML(item, ++cardSeq)).join('');
+  const cards = list.map(item => cardHTML(item, ++cardSeq, cat)).join('');
   return `
     <section class="cat" data-cat="${esc(cat.id)}">
       <div class="cat-head">
@@ -684,6 +730,8 @@ function renderTotals(){
   $('listNote').textContent = total ? `${cats} 个分区 · 共 ${total} 条` : '0 条';
   const el = $('statLines');
   if (el) el.textContent = total;
+  const catEl = $('statCats');
+  if (catEl) catEl.textContent = cats;
   if (!total){
     setStatus('源列表为空', 'warn');
     return;
@@ -794,7 +842,57 @@ qrCopy.addEventListener('click', () => {
 });
 
 /* ======================= 查看源包含的站点 ======================= */
-const cfgCache = new Map();          // 配置地址 → Promise<json>
+const cfgCache = new Map();          // 配置地址 → Promise<json>（仅本次会话）
+
+/* ---------- 12 小时本地缓存 ----------
+ * 站点清单 / 频道列表读一次要打好几个请求（直连 + 镜像 + 代理），
+ * 没必要每次点开都重来：解析结果存 localStorage，12 小时内直接复用。
+ * 点弹层里的「重试」会绕过缓存强制刷新。
+ */
+const CACHE_TTL = 12 * 60 * 60 * 1000;
+const CACHE_PREFIX = 'tvboxsrc:';
+
+function cacheGet(url){
+  try {
+    const raw = localStorage.getItem(CACHE_PREFIX + url);
+    if (!raw) return null;
+    const hit = JSON.parse(raw);
+    if (!hit || typeof hit.t !== 'number') return null;
+    if (Date.now() - hit.t > CACHE_TTL){
+      localStorage.removeItem(CACHE_PREFIX + url);   // 过期即清
+      return null;
+    }
+    return hit;
+  } catch (e){ return null; }   // 无痕模式 / 禁用存储时静默降级
+}
+
+function cacheSet(url, data){
+  const payload = JSON.stringify(Object.assign({ t: Date.now() }, data));
+  try {
+    localStorage.setItem(CACHE_PREFIX + url, payload);
+  } catch (e){
+    // 配额满了：先清掉自己写过的，再试一次；还失败就放弃，不影响使用
+    try {
+      Object.keys(localStorage).forEach(k => { if (k.indexOf(CACHE_PREFIX) === 0) localStorage.removeItem(k); });
+      localStorage.setItem(CACHE_PREFIX + url, payload);
+    } catch (e2){}
+  }
+}
+
+// 缓存时间的说明文案
+function cacheAge(hit){
+  const m = Math.round((Date.now() - hit.t) / 60000);
+  if (m < 1) return '刚刚缓存';
+  if (m < 60) return m + ' 分钟前缓存';
+  return Math.round(m / 60) + ' 小时前缓存';
+}
+
+// 弹层副标题右侧的小标记，说明数据来自缓存而不是实时读取
+function cacheMark(res){
+  if (!res || !res.fromCache) return '';
+  return ` <span class="stale" title="${esc(cacheAge(res))}，12 小时内不再重复读取；点「重试」可立即刷新">缓存</span>`;
+}
+
 const CORS_PROXIES = [
   u => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u),
   u => 'https://api.codetabs.com/v1/proxy/?quest=' + encodeURIComponent(u),
@@ -809,7 +907,7 @@ const typeTag = t => {
 const sitesOf = cfg => (cfg && Array.isArray(cfg.sites) ? cfg.sites : []);
 
 // 直播源那种播放列表（m3u / txt）没有站点清单，卡片上不显示这个按钮
-const isPlaylist = u => /^(M3U8?|TXT|TS|TXT)$/i.test(kindOf(u));
+const isPlaylist = u => /^(M3U8?|TS|TXT)$/i.test(kindOf(u));
 
 // 带超时的 fetch，避免代理挂住导致弹层一直转圈
 async function fetchTxt(target, ms){
@@ -892,6 +990,76 @@ function loadConfig(url){
 let panelData = [];        // 当前弹层的数据（站点 或 频道）
 let panelMode = 'sites';   // sites | channels
 let sitesUrl = '';
+
+/* ---------- 带缓存的两种取数 ---------- */
+
+// 配置类：返回 { kind, items, lives, parses, logo, fromCache?, t? }
+async function resolveSites(url, force){
+  if (!force){
+    const hit = cacheGet(url);
+    if (hit && hit.kind === 'config') return Object.assign({}, hit, { fromCache: true });
+  } else {
+    cfgCache.delete(url);   // 强制刷新时连本次会话的内存缓存一起丢
+  }
+
+  let cfg = await loadConfig(url);
+
+  // 有些配置把站点列表拆到另一个地址
+  if (cfg && typeof cfg.sites === 'string' && /^https?:/i.test(cfg.sites)){
+    const sub = await loadConfig(cfg.sites.trim());
+    if (sub) cfg = sub;
+  }
+
+  const out = {
+    kind: 'config',
+    items: sitesOf(cfg).slice(0, 500).map(s => {
+      const o = s || {};
+      const key = o.key == null ? '' : String(o.key);
+      return {
+        name: String(o.name || key || '未命名').trim(),
+        key,
+        type: o.type,
+        searchable: Number(o.searchable) === 1
+      };
+    }),
+    lives: Array.isArray(cfg && cfg.lives) ? cfg.lives.length : 0,
+    parses: Array.isArray(cfg && cfg.parses) ? cfg.parses.length : 0,
+    logo: (cfg && typeof cfg.logo === 'string') ? cfg.logo : ''
+  };
+  cacheSet(url, out);
+  return out;
+}
+
+// 播放列表类：返回 { kind, items, fromCache?, t? }
+async function resolveChannels(url, onProgress, force){
+  if (!force){
+    const hit = cacheGet(url);
+    if (hit && hit.kind === 'list') return Object.assign({}, hit, { fromCache: true });
+  }
+
+  let text = await fetchTextAny(url, 14000, how => {
+    if (onProgress) onProgress(`正在读取播放列表…（${how}）`);
+  });
+  let chans = parsePlaylist(text);
+
+  // 本体没解析出频道时，才去跟 #EXT-X-SUB-URL 指的子列表
+  if (!chans.length){
+    const sub = (text.match(/^#EXT-X-SUB-URL\s+(\S+)/im) || [])[1];
+    if (sub && /^https?:\/\//i.test(sub)){
+      try {
+        const subText = await fetchTextAny(sub, 14000, how => {
+          if (onProgress) onProgress(`正在读取子列表…（${how}）`);
+        });
+        const subChans = parsePlaylist(subText);
+        if (subChans.length) chans = subChans;
+      } catch (e) { /* 子列表拿不到就用本体的 */ }
+    }
+  }
+
+  const out = { kind: 'list', items: chans };
+  if (chans.length) cacheSet(url, out);   // 空结果不缓存，下次还能重试
+  return out;
+}
 
 function setCardCount(url, n, unit){
   catsBox.querySelectorAll('.more').forEach(btn => {
@@ -1023,7 +1191,7 @@ function renderSites(filter){
 }
 
 // 播放列表：列出频道
-async function openChannels(url, name){
+async function openChannels(url, name, force){
   panelMode = 'channels';
   panelData = [];
   sitesUrl = url;
@@ -1038,28 +1206,10 @@ async function openChannels(url, name){
   openModal($('sitesModal'));
 
   try {
-    // 直连 → ghproxy 镜像 → 公共代理，逐级退让
-    let text = await fetchTextAny(url, 14000, how => {
-      $('sitesSub').textContent = `正在读取播放列表…（${how}）`;
-    });
+    // 有缓存就直接用（12 小时内），没有再直连 → 镜像 → 代理逐级退让
+    const res = await resolveChannels(url, msg => { $('sitesSub').textContent = msg; }, force);
+    panelData = res.items;
 
-    let chans = parsePlaylist(text);
-
-    // 本体没解析出频道时，才去跟 #EXT-X-SUB-URL 指的子列表
-    if (!chans.length){
-      const sub = (text.match(/^#EXT-X-SUB-URL\s+(\S+)/im) || [])[1];
-      if (sub && /^https?:\/\//i.test(sub)){
-        try {
-          const subText = await fetchTextAny(sub, 14000, how => {
-            $('sitesSub').textContent = `正在读取子列表…（${how}）`;
-          });
-          const subChans = parsePlaylist(subText);
-          if (subChans.length) chans = subChans;
-        } catch (e) { /* 子列表拿不到就用本体的 */ }
-      }
-    }
-
-    panelData = chans;
     const groups = [...new Set(panelData.map(c => c.group).filter(Boolean))];
 
     if (!panelData.length){
@@ -1070,7 +1220,7 @@ async function openChannels(url, name){
 
     const bits = [`<b>${panelData.length}</b> 个频道`];
     if (groups.length) bits.push(`<b>${groups.length}</b> 个分组`);
-    $('sitesSub').innerHTML = bits.join(' · ');
+    $('sitesSub').innerHTML = bits.join(' · ') + cacheMark(res);
     $('sitesSearchWrap').hidden = panelData.length < 8;
     setCardCount(url, panelData.length, '频道');
     renderSites('');
@@ -1085,12 +1235,12 @@ async function openChannels(url, name){
          <button type="button" class="retry" id="sitesRetry">重试</button>
        </div>`;
     const retry = $('sitesRetry');
-    if (retry) retry.onclick = () => openChannels(url, name);
+    if (retry) retry.onclick = () => openChannels(url, name, true);
   }
 }
 
-async function openSites(url, name, type){
-  if (type === 'list') return openChannels(url, name);
+async function openSites(url, name, type, force){
+  if (type === 'list') return openChannels(url, name, force);
 
   panelMode = 'sites';
   panelData = [];
@@ -1106,32 +1256,16 @@ async function openSites(url, name, type){
   openModal($('sitesModal'));
 
   try {
-    let cfg = await loadConfig(url);
+    // 有缓存（12 小时内）就直接用，不再打网络
+    const res = await resolveSites(url, force);
+    panelData = res.items;
 
-    // 有些配置把站点列表拆到另一个地址
-    if (cfg && typeof cfg.sites === 'string' && /^https?:/i.test(cfg.sites)){
-      const sub = await loadConfig(cfg.sites.trim());
-      if (sub) cfg = sub;
-    }
-
-    const rawSites = sitesOf(cfg);
-    panelData = rawSites.slice(0, 500).map(s => {
-      const o = s || {};
-      const key = o.key == null ? '' : String(o.key);
-      return {
-        name: String(o.name || key || '未命名').trim(),
-        key,
-        type: o.type,
-        searchable: Number(o.searchable) === 1
-      };
-    });
-
-    const lives = Array.isArray(cfg && cfg.lives) ? cfg.lives.length : 0;
-    const parses = Array.isArray(cfg && cfg.parses) ? cfg.parses.length : 0;
     const bits = [`<b>${panelData.length}</b> 个站点`];
-    if (lives) bits.push(`<b>${lives}</b> 个直播`);
-    if (parses) bits.push(`<b>${parses}</b> 个解析`);
-    $('sitesSub').innerHTML = bits.join(' · ');
+    if (res.lives) bits.push(`<b>${res.lives}</b> 个直播`);
+    if (res.parses) bits.push(`<b>${res.parses}</b> 个解析`);
+    $('sitesSub').innerHTML = bits.join(' · ') + cacheMark(res);
+
+    if (res.logo) applyLogo(url, res.logo);
 
     if (!panelData.length){
       $('sitesList').innerHTML = '<div class="panel-state">这个配置里没有 <b>sites</b> 列表。</div>';
@@ -1143,7 +1277,7 @@ async function openSites(url, name, type){
   } catch (err) {
     // 判断失误：地址其实是播放列表 → 直接按频道列表展示
     if (err && err.code === NOT_JSON){
-      return openChannels(url, name);
+      return openChannels(url, name, force);
     }
     // 跨域读不到属于正常情况：配置照样能直接用，这里只是看不了清单
     $('sitesSub').textContent = '清单不可用 · 不影响使用';
@@ -1155,7 +1289,7 @@ async function openSites(url, name, type){
          <button type="button" class="retry" id="sitesRetry">重试</button>
        </div>`;
     const retry = $('sitesRetry');
-    if (retry) retry.onclick = () => openSites(url, name);
+    if (retry) retry.onclick = () => openSites(url, name, 'config', true);
   }
 }
 
@@ -1170,28 +1304,62 @@ $('sitesCopy').addEventListener('click', () => {
   }, 1500);
 });
 
-/* 卡片上顺手预取站点数 / logo（只用直连，失败就算了） */
+/* 卡片上顺手预取站点数 / logo，并把结果写进 12 小时缓存（之后点开秒显示）。
+ * 并发池限 2，避免一上来打一堆请求；跨域 / 网络失败就静默跳过。 */
 function prefetchCounts(){
-  [...catsBox.querySelectorAll('.more')].forEach((btn, i) => {
-    setTimeout(async () => {
-      const url = btn.dataset.sites;
-      if (!url || btn.dataset.pf === '1' || isPlaylist(url)) return;
-      btn.dataset.pf = '1';
+  const jobs = [...catsBox.querySelectorAll('.more')].filter(btn => {
+    const url = btn.dataset.sites;
+    if (!url || btn.dataset.pf === '1' || isPlaylist(url)) return false;
+    btn.dataset.pf = '1';
+    return true;
+  });
+
+  const LIMIT = 2;
+  let next = 0;
+
+  const worker = async () => {
+    while (next < jobs.length){
+      const url = jobs[next++].dataset.sites;
       try {
-        let cfg;
-        if (cfgCache.has(url)){
-          cfg = await cfgCache.get(url);
-        } else {
-          const text = await fetchTxt(url, 12000);
-          if (!/^\s*[{[]/.test(text.replace(/^\uFEFF/, ''))) return;   // 播放列表跳过
-          cfg = JSON.parse(text.replace(/^\uFEFF/, ''));
-          cfgCache.set(url, Promise.resolve(cfg));   // 顺手缓存，点开即显示
-        }
-        if (cfg && cfg.logo) applyLogo(url, String(cfg.logo));
-        const n = sitesOf(cfg).length;
-        if (n) setCardCount(url, n);
-      } catch (e) { /* 跨域/网络失败，忽略 */ }
-    }, 700 + i * 800);
+        const res = await resolveSites(url);   // 命中 12 小时缓存时不会打网络
+        if (res.logo) applyLogo(url, res.logo);
+        if (res.items.length) setCardCount(url, res.items.length);
+      } catch (e) { /* 跨域 / 网络失败，忽略 */ }
+    }
+  };
+
+  for (let i = 0; i < Math.min(LIMIT, jobs.length); i++) worker();
+}
+
+/* ======================= 源可用状态 ======================= */
+/**
+ * status.json 由 .github/workflows/check-sources.yml 每天探测生成。
+ * 读不到（本地直接打开、或还没生成过）就整体跳过，不影响页面。
+ * 不可用不用红点角标，直接在卡片上写清楚「暂时无法使用」。
+ */
+async function loadHealth(){
+  let data;
+  try {
+    const res = await fetch('status.json', { cache: 'no-store' });
+    if (!res.ok) return;
+    data = await res.json();
+  } catch (e){ return; }
+
+  const map = (data && data.sources) || {};
+
+  catsBox.querySelectorAll('.src').forEach(card => {
+    const st = map[card.dataset.url];
+    if (!st || st.ok !== false) return;   // 只处理明确探测失败的
+
+    card.classList.add('offline');
+    const flag = card.querySelector('[data-flag]');
+    if (!flag) return;
+
+    const why = (st.reason || '').trim();
+    flag.innerHTML = `<b>暂时无法使用</b>` +
+      (why ? `<span class="sug">· ${esc(why)}</span>` : '') +
+      `<span class="sug">· 可以先试其它源</span>`;
+    flag.hidden = false;
   });
 }
 
@@ -1259,6 +1427,7 @@ async function loadCategory(cat){
   clearSkeletons();
   renderTotals();
   prefetchCounts();
+  loadHealth();          // 不 await：读不到 status.json 也不该拖慢首屏
 
   const okCount = results.filter(r => r.ok).length;
   if (!okCount){

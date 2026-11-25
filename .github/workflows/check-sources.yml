@@ -1,0 +1,43 @@
+name: Check sources
+
+# 每天探测一次各源地址是否还能打开，结果写进 status.json。
+# 页面读这个文件，把打不开的源标成「暂时无法使用」。
+# 只有状态真的变了才会提交，所以不会每天多一条无意义的提交。
+
+on:
+  schedule:
+    - cron: '0 4 * * *'      # 04:00 UTC = 北京时间 12:00
+  workflow_dispatch:
+
+permissions:
+  contents: write           # 需要提交 status.json
+
+concurrency:
+  group: check-sources
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Probe sources
+        run: python3 scripts/check_sources.py
+
+      - name: Commit status.json if changed
+        run: |
+          set -eu
+          if [ -z "$(git status --porcelain status.json)" ]; then
+            echo "源状态无变化，跳过提交"
+            exit 0
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add status.json
+          git commit -m "chore: 更新源可用状态"
+          git push

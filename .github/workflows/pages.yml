@@ -22,9 +22,27 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+
+      # 只把站点真正需要的文件拷到 dist/，再上传 dist/。
+      # 这样调试脚本、工具文件、隐藏目录永远不会被发到公网。
+      - name: Build dist
+        run: |
+          set -eu
+          mkdir -p dist
+          cp index.html dist/
+          # 分区数据文件：除 README 外的所有 md，以后新增分区不用改这里
+          for f in *.md; do
+            if [ "$f" = "README.md" ]; then continue; fi
+            cp "$f" dist/
+          done
+          # 源可用状态（由 check-sources.yml 生成，首次可能还不存在）
+          if [ -f status.json ]; then cp status.json dist/; fi
+          echo "--- dist ---"
+          ls -la dist
+
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: .
+          path: dist
       - id: deployment
         uses: actions/deploy-pages@v4
