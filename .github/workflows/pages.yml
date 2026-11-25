@@ -7,6 +7,8 @@ on:
 
 permissions:
   contents: read
+  # 下面「等待 artifact 就绪」那步要查 Actions artifacts 接口
+  actions: read
   pages: write
   id-token: write
 
@@ -44,5 +46,34 @@ jobs:
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
+
+      # upload-pages-artifact 报成功后，GitHub 的 artifact 索引有几十秒的延迟，
+      # 而 deploy-pages 是一次性查询、查不到就直接报
+      #   "No artifacts named github-pages were found for this workflow run"
+      # 并退出，不重试。所以这里先轮询到 artifact 真的可查，再去部署。
+      - name: 等待 artifact 就绪
+        run: |
+          set -eu
+          api="https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/artifacts"
+          for i in $(seq 1 20); do
+            n=$(curl -sS -m 10 \
+                  -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+                  -H "Accept: application/vnd.github+json" \
+                  -H "X-GitHub-Api-Version: 2022-11-28" \
+                  "${api}?name=github-pages" \
+                | grep -o '"total_count": *[0-9]*' | head -1 | grep -o '[0-9]*$' || true)
+            n=${n:-0}
+            if [ "$n" -ge 1 ]; then
+              echo "artifact 已就绪（第 ${i} 次查询，耗时约 $(( (i - 1) * 3 ))s）"
+              exit 0
+            fi
+            echo "第 ${i}/20 次：还没查到 github-pages artifact，等 3 秒"
+            sleep 3
+          done
+          echo "::error::60 秒内查不到 github-pages artifact。若 artifact 列表里明明有，直接 re-run 一次即可。"
+          exit 1
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
       - id: deployment
         uses: actions/deploy-pages@v4
