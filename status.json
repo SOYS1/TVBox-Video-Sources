@@ -1,13 +1,14 @@
 {
-  "checked": "2026-11-25T14:47:36Z",
+  "checked": "2026-11-26T13:42:09Z",
   "sources": {
     "https://700sjro44343.vicp.fun/240731/one/": {
       "http": 206,
       "ok": true
     },
     "https://9280.kstore.vip/aiwex.json": {
-      "http": 206,
-      "ok": true
+      "http": 502,
+      "ok": false,
+      "reason": "HTTP 502"
     },
     "https://ghproxy.net/raw.githubusercontent.com/Guovin/TV/gd/output/result.m3u": {
       "http": 206,
@@ -18,12 +19,12 @@
       "ok": true
     },
     "https://raw.githubusercontent.com/Kimentanm/aptv/master/m3u/iptv.m3u": {
-      "ok": false,
-      "reason": "连接失败"
+      "http": 206,
+      "ok": true
     },
     "https://raw.githubusercontent.com/suxuang/myIPTV/main/ipv4.m3u": {
-      "ok": false,
-      "reason": "连接失败"
+      "http": 206,
+      "ok": true
     }
   }
 }
