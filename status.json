@@ -1,5 +1,5 @@
 {
-  "checked": "2026-11-27T13:39:52Z",
+  "checked": "2026-11-28T12:50:37Z",
   "sources": {
     "https://700sjro44343.vicp.fun/240731/one/": {
       "http": 206,
@@ -11,7 +11,7 @@
     },
     "https://ghproxy.net/raw.githubusercontent.com/Guovin/TV/gd/output/result.m3u": {
       "ok": false,
-      "reason": "连接失败"
+      "reason": "连接超时"
     },
     "https://iptv.445569.xyz/live.m3u": {
       "http": 200,
